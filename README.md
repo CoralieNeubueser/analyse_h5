@@ -32,10 +32,12 @@ git clone https://github.com/CoralieNeubueser/analyse_h5.git .
 use run.py scipt in python/
 
 ~~~
-python3 python/run.py --numRuns 1
+python3 python/run.py --numRuns 1 --hepd 
 ~~~
 
 - it finds h5 files in ```/storage/gpfs_data/limadou/data/flight_data/L3h5/``` if flag ```--hepd``` is raised. To run on LEOS data, specify ```--hepp``` and the files are found in ```/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/```. 
 
-- the analysis is run from the top of the list, in case that the corresponding root file already exists in ```{workDir}/root/```, the analysis is run on the next file on the list.  
+- the analysis is run from the top of the list, in case that the corresponding root file already exists in ```{workDir}/root/```, the analysis is run on the next file on the list. 
+
+- add ```--merge``` to merge the output root trees to one.
 

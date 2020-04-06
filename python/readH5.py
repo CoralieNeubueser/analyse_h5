@@ -11,7 +11,7 @@ r.gStyle.SetPadRightMargin(0.2)
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
-parser.add_argument('--data', type=str, choices=['hepd','leos'], required=True, help='Define patht to data file.')
+parser.add_argument('--data', type=str, choices=['hepd','hepp'], required=True, help='Define patht to data file.')
 
 args,_=parser.parse_known_args()
 
@@ -25,10 +25,10 @@ for dset in traverse_datasets(f):
     print(dset, f[dset].shape, f[dset].dtype)
     
 parameters = dict([('hepd', ['L_parameter', 'HEPD_ele_energy_table', 'HEPD_ele_pitch_table', 'HEPD_ele_energy_pitch', 'UTCTime']),
-                   ('leos', ['L_parameter', 'Energy_Table_Electron', 'PitchAngle', 'A412', 'UTC_TIME']),
+                   ('hepp', ['L_parameter', 'Energy_Table_Electron', 'PitchAngle', 'A412', 'UTC_TIME']),
                ])
 lonlat = dict([('hepd', ['LonLat', 'LonLat'] ),
-               ('leos', ['GEO_LON', 'GEO_LAT'] )
+               ('hepp', ['GEO_LON', 'GEO_LAT'] )
            ])
 
 dset1 = f[parameters[args.data][0]][()] 
@@ -43,7 +43,7 @@ maxEv = len(dset2)
 print("Events: ", maxEv)
 
 time_blanc = dset_time[0]
-if args.data=='leos':
+if args.data=='hepp':
     time_blanc = dset_time[0][0]
 time_max = int(str(time_blanc)[-6:-4])*60*60 +  int(str(time_blanc)[-4:-2])*60 +  int(str(time_blanc)[-2:])
 
@@ -82,8 +82,8 @@ for iev,ev in enumerate(dset2):
         time_calc = 60*60*int(str(dset_time[iev])[-6:-4]) + 60*int(str(dset_time[iev])[-4:-2]) + int(str(dset_time[iev])[-2:])
         time_act = (time_calc-time_max)/60.
         hist2D_loc.SetBinContent(int(dset_lon[iev][0]+180), int(dset_lat[iev][1]+90), float(time_act))
-    # fill tree and histos for LEOS data
-    elif args.data=='leos':
+    # fill tree and histos for HEPP data
+    elif args.data=='hepp':
         time_calc = 60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
         time_act = (time_calc-time_max)/60.
         hist2D_loc.SetBinContent(int(dset_lon[iev]+180), int(dset_lat[iev]+90), float(time_act))
@@ -119,7 +119,10 @@ for iev,ev in enumerate(dset2):
                         
 outpdf = os.path.split(filename)[1]
 outpdf = outpdf.replace("h5","pdf")
-outpdf = outpdf.replace("CSES_HEP","map")
+if args.data=='hepd':
+    outpdf = outpdf.replace("CSES_HEP","map")
+elif args.data=='hepp':
+    outpdf = outpdf.replace("CSES_01_HEP_1","map")
 outpdf = home()+"/plots/"+outpdf
 print("Writing maps to: ", outpdf)
 

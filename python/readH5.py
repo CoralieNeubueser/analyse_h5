@@ -25,7 +25,7 @@ for dset in traverse_datasets(f):
     print(dset, f[dset].shape, f[dset].dtype)
     
 parameters = dict([('hepd', ['L_parameter', 'HEPD_ele_energy_table', 'HEPD_ele_pitch_table', 'HEPD_ele_energy_pitch', 'UTCTime']),
-                   ('hepp', ['L_parameter', 'Energy_Table_Electron', 'PitchAngle', 'A412', 'UTC_TIME']),
+                   ('hepp', ['L_parameter', 'Energy_Table_Electron', 'PitchAngle', 'A411', 'UTC_TIME']),
                ])
 lonlat = dict([('hepd', ['LonLat', 'LonLat'] ),
                ('hepp', ['GEO_LON', 'GEO_LAT'] )

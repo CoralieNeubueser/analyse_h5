@@ -6,6 +6,7 @@ parser.add_argument('--numRuns', type=int, help='Define number of runs to be ana
 parser.add_argument('--hepd', action='store_true', help='Analyse HEPD data.')
 parser.add_argument('--hepp', action='store_true', help='Analyse HEPP data.')
 parser.add_argument('--merge', action='store_true', help='Merge all runs.')
+parser.add_argument('-q','--quiet', action='store_true', help='Run without printouts.')
 args,_=parser.parse_known_args()
 
 runs = args.numRuns
@@ -27,8 +28,10 @@ if not args.merge:
         if os.path.isfile(outfile):
             print("Output root file already exists... \n run analysis on the next run. ")
             runs=runs+1
-        else:        
+        else:
             cmd='python3 python/readH5.py --inputFile '+str(run)
+            if not args.quiet:
+                cmd+=' --debug'
             if args.hepd:
                 cmd+=' --data hepd'
             elif args.hepp:
@@ -38,9 +41,16 @@ if not args.merge:
 
 else:
     mge=''
+    runList=[]
+
     if args.hepd:
-        mge = 'hadd -f -k root/all_hepd.root root/CSES_HEP_DDD_*.root'
+        # write 
+        mge = 'root/all_hepd.root'
+        runList = glob.glob('root/CSES_HEP_DDD_*.root')
     elif args.hepp: 
-        mge = 'hadd -f -k root/all_hepp.root root/CSES_01_HEP_1_*.root'
-    print(mge)
-    os.system(mge)
+        mge = 'root/all_hepp.root'
+        runList = glob.glob('root/CSES_01_HEP_1_*.root')
+
+    print("Merge all files in: ", mge)
+    merge(mge, runList)
+    

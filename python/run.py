@@ -2,24 +2,30 @@ import os, sys, argparse, re, glob
 from utils import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--numRuns', type=int, help='Define number of runs to be analysed.', required='--merge' not in sys.argv)
+parser.add_argument('--numRuns', type=int, help='Define number of runs to be analysed.', required=True)
 parser.add_argument('--hepd', action='store_true', help='Analyse HEPD data.')
 parser.add_argument('--hepp', action='store_true', help='Analyse HEPP data.')
 parser.add_argument('--merge', action='store_true', help='Merge all runs.')
+parser.add_argument('--ana', action='store_true', help='Analyse all runs.')
 parser.add_argument('-q','--quiet', action='store_true', help='Run without printouts.')
 args,_=parser.parse_known_args()
 
 runs = args.numRuns
 os.system('source /opt/exp_software/limadou/set_env_standalone.sh')
 
-datapath = ''
+datapaths = []
 if args.hepd:
-    datapath = '/storage/gpfs_data/limadou/data/flight_data/L3h5/'
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*.h5')
 elif args.hepp:
-    datapath = '/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*'
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190222*.h5')
+    datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190223*.h5')
+    datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190224*.h5')
+    datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190225*.h5')
+    datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190226*.h5')
+
     
-if not args.merge:
-    for irun,run in enumerate(glob.glob(datapath+'*.h5')):
+if not args.merge and not args.ana:
+    for irun,run in enumerate(datapaths):
         if irun>(runs-1):
             break
         outfile = home()+"/root/"+(os.path.split(run)[1]).replace("h5","root")
@@ -39,18 +45,29 @@ if not args.merge:
             print(cmd)
             os.system(cmd)
 
-else:
+# run analysis on single root files
+elif args.ana:
+    print("Run some analysis on single file.")
+    mge = 'root/all_hepd_'+str(runs)+'runs.root'
+    if args.hepp:
+        mge = 'root/all_hepp_'+str(runs)+'runs.root'
+
+    # open root file
+    runana='python3 python/analyseRoot.py --inputFile '+str(mge)
+    os.system(runana)
+
+# merge all root files
+elif args.merge:
     mge=''
     runList=[]
 
     if args.hepd:
         # write 
-        mge = 'root/all_hepd.root'
+        mge = 'root/all_hepd_'+str(runs)+'runs.root'
         runList = glob.glob('root/CSES_HEP_DDD_*.root')
     elif args.hepp: 
-        mge = 'root/all_hepp.root'
+        mge = 'root/all_hepp_'+str(runs)+'runs.root'
         runList = glob.glob('root/CSES_01_HEP_1_*.root')
 
     print("Merge all files in: ", mge)
-    merge(mge, runList)
-    
+    merge(mge, runList, runs)

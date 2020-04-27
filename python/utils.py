@@ -1,4 +1,5 @@
 import os,sys
+import numpy as np
 import ROOT as r
 import h5py
 
@@ -33,17 +34,31 @@ def draw2D(hist2d, xtitle, ytitle, ztitle, zmin, zmax, out, log):
     
     can.Print(out)
 
+def prep2D(hist2d, xtitle, ytitle, ztitle, logz):
+
+    hist2d.GetXaxis().SetTitle(xtitle),
+    hist2d.GetYaxis().SetTitle(ytitle)
+    hist2d.GetZaxis().SetTitle(ztitle)
+
+    if logz:
+        can.SetLogz()
+
+    return hist2d
+
 def home():
     return os.getcwd()
 
-def merge(name, listOfFiles):
+def merge(name, listOfFiles, runs):
     ch=r.TChain("tree")  # creates a chain to process a Tree called "T"
     hist2D_l_pitch=r.TH2D("hist2D_l_pitch","hist2D_l_pitch",18,1,10,9,10.,190.)
     hist2D_loc=r.TH2D("hist2D_loc","hist2D_loc",361,-180.5,180.5,181,-90.5,90.5)
     hist2D_loc_flux=r.TH2D("hist2D_loc_flux","hist2D_loc_flux",361,-180.5,180.5,181,-90.5,90.5)
     hist2D_loc_field=r.TH2D("hist2D_loc_field","hist2D_loc_field",361,-180.5,180.5,181,-90.5,90.5)
 
-    for inFile in listOfFiles:
+    for iF,inFile in enumerate(listOfFiles):
+        # limit number of files used for merge
+        if iF>runs:
+            break
         ch.Add(inFile)
         # open file, get histogram, add without sum over entries
         inRoot = r.TFile( inFile , 'read' )
@@ -88,13 +103,35 @@ def merge(name, listOfFiles):
                     hist2D_loc.SetBinContent(bint, cont2)
                 if hist2D_loc_field.GetBinContent(bint)==0.:
                     hist2D_loc_field.SetBinContent(bint, cont4)
-
-
+        inRoot.Close()
+    
     ch.Merge(name)
     outRoot = r.TFile(name, 'update')
+    r.gStyle.SetPadRightMargin(0.5)
+    r.gStyle.SetOptStat(0)
+    prep2D(hist2D_l_pitch, 'L value', 'pitch [deg]', '#LT flux #GT',False)
+    prep2D(hist2D_loc, 'longitude', 'latitude', 'time',False)
+    prep2D(hist2D_loc_flux, 'longitude', 'latitude', '#LT flux #GT',False)
+    prep2D(hist2D_loc_field, 'longitude', 'latitude', 'field [nT]',False)
+
     hist2D_l_pitch.Write()
     hist2D_loc.Write()
     hist2D_loc_flux.Write()
     hist2D_loc_field.Write()
+    outRoot.Close()
+    return True
 
-    return outRoot
+def takeSqrt(hist2D,histDiv):
+
+    hist2D.Sumw2()
+    hist2D.Divide(histDiv)
+    xbins = hist2D.GetNbinsX()
+    ybins = hist2D.GetNbinsY()
+    
+    for binx in range(0,xbins+1):
+        for biny in range(0,ybins+1):
+            bint = hist2D.GetBin(binx,biny)
+            cont = hist2D.GetBinContent(bint)
+            hist2D.SetBinContent(bint,np.sqrt(cont))
+
+    return hist2D

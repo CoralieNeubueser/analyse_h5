@@ -47,9 +47,21 @@ if args.debug:
     print("Events: ", maxEv)
 
 time_blanc = dset_time[0]
+time_blanc_min = dset_time[maxEv-1]
+energy_bins = 12
 if args.data=='hepp':
     time_blanc = dset_time[0][0]
-time_max = int(str(time_blanc)[-6:-4])*60*60 +  int(str(time_blanc)[-4:-2])*60 +  int(str(time_blanc)[-2:])
+    time_blanc_min = dset_time[maxEv-1][0]
+    energy_bins = 256
+
+time_min = int(str(time_blanc)[-6:-4])*60*60 +  int(str(time_blanc)[-4:-2])*60 +  int(str(time_blanc)[-2:])
+time_max = int(str(time_blanc_min)[-6:-4])*60*60 +  int(str(time_blanc_min)[-4:-2])*60 +  int(str(time_blanc_min)[-2:])
+
+badRun=False
+# compare time of first and last event and only use here in case that full half-orbit is stored
+if (time_max-time_min)/60<30: # in minutes
+    badRun=True
+    sys.exit(("This file {} is not used, due to incomplete semi-orbit. ").format(filename))
 
 # prepare root output                            
 outRootName = os.path.split(filename)[1].replace("h5","root")
@@ -62,26 +74,20 @@ L = array( 'f', [ 0. ] )
 P = array( 'f', [ 0. ] )
 E = array( 'f', [ 0. ] )
 C = array( 'f', [ 0. ] )
-F = array( 'f', [ 0. ] )
+F_vec =r.std.vector(float)(energy_bins)
 T = array( 'f', [ 0. ] )
+Tday = array( 'f', [ 0. ] )
 Lo = array( 'i', [ 0 ] )
 La = array( 'i', [ 0 ] )
 B = array( 'f', [ 0. ] )
-
-Clist = []
-Lvalue = [1,1.5,2,2.5,3,3.5,4,4.5,5]
-for iL in range(1,10):
-    for iP in range(0,9):
-        Clist.append(array( 'f', [ 0. ] ))
-        ind = (iL-1)*9 + iP
-        tree.Branch( 'count_'+str(Lvalue[iL-1])+'_'+str(iP), Clist[ind], 'count_'+str(Lvalue[iL-1])+'_'+str(iP)+'/F' )
             
 tree.Branch( 'L', L, 'L/F' )
 tree.Branch( 'pitch', P, 'pitch/F' )
 tree.Branch( 'energy', E, 'energy/F' )
 tree.Branch( 'count', C, 'count/F' )
-tree.Branch( 'flux', F, 'flux/F' )
+tree.Branch( 'flux_en', F_vec )
 tree.Branch( 'time', T, 'time/F' )
+tree.Branch( 'day', Tday, 'day/F' )
 tree.Branch( 'Long', Lo, 'Long/I' )
 tree.Branch( 'Lat', La, 'Lat/I' )
 tree.Branch( 'field', B, 'field/F' )
@@ -95,21 +101,32 @@ hist2D_loc_field=r.TH2D("hist2D_loc_field","hist2D_loc_field",361,-180.5,180.5,1
 for iev,ev in enumerate(dset2):
     lonInt = int(0)
     latInt = int(0)
-
+    Bfield = float(0.)
     if args.data=='hepd':
         # fill tree and histograms for HEPD data
         time_calc = 60*60*int(str(dset_time[iev])[-6:-4]) + 60*int(str(dset_time[iev])[-4:-2]) + int(str(dset_time[iev])[-2:])
-        time_act = (time_calc-time_max)/60.
+        time_act = (time_calc-time_min)/60.
         lonInt = int(dset_lon[iev][0])
         latInt = int(dset_lat[iev][1])
+        Bfield = dset_field[iev]
 
     elif args.data=='hepp':
         # fill tree and histos for HEPP data 
         time_calc = 60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
-        time_act = (time_calc-time_max)/60.
+        time_act = (time_calc-time_min)/60.
+
         lonInt = int(dset_lon[iev])
         latInt = int(dset_lat[iev])
+        # translate cyclotron frequency w=qe*B/(2pi*me) 1/s to B
+        qe = 1.602176634e-19 # C = 1.602176634×10−19 As
+        # 1Gs = e-4 T = e-4kg/(As2)
+        me = 9.109e-31 # kg
+        # w seems to have been wrongly calculated in T instead of Gauss, or in 10kHz
+        # translate in nT
+        Bfield = dset_field[iev]*me/qe*2*np.pi*1e9
         
+
+
     # fill 2D histograms / event
     # time of half-orbit
     binx = hist2D_loc.GetXaxis().FindBin(lonInt)
@@ -120,11 +137,11 @@ for iev,ev in enumerate(dset2):
     # B field of the earth
     bint = hist2D_loc_field.GetBin(hist2D_loc_field.GetXaxis().FindBin(lonInt),hist2D_loc_field.GetYaxis().FindBin(latInt),0)
     if hist2D_loc_field.GetBinContent(bint)==0.: 
-        hist2D_loc_field.SetBinContent(bint, float(dset_field[iev]))
+        hist2D_loc_field.SetBinContent(bint, Bfield)
 
     countInt = int()
     if iev==1 and args.debug:
-        print("B field: ", dset_field[iev])
+        print("B field [nT]: ", Bfield)
         print("LON/LAT: {}/{}".format(lonInt,latInt) )
         print("L-value: ", dset1[iev])
         if args.data=='hepd':
@@ -141,7 +158,8 @@ for iev,ev in enumerate(dset2):
                     print("--- Energy:  ", dset_en[0][ie])
                     print("--- Pitch:   ", dset_p[0][ip])
                     print("--- Flux:    ", flux)
-                
+                    print("--- Time:    ", dset_time[iev])
+                                    
                 # HEPP data has stores counts per pitch angle  
                 if args.data=='hepp':
                     countInt = dset_count[iev][ip]
@@ -164,20 +182,14 @@ for iev,ev in enumerate(dset2):
                 # fill tree
                 L[0] = dset1[iev]
                 P[0] = dset_p[0][ip]
-                F[0] = flux
+                F_vec[ie] = flux
                 E[0] = dset_en[0][ie]
-                T[0] = time_calc
+                T[0] = time_calc/60/60 # in hours
+                Tday[0] = int(str(dset_time[iev][0])[-14:-6])
                 C[0] = countInt
                 Lo[0] = lonInt
                 La[0] = latInt
-                B[0] = dset_field[iev]
-
-                # if L-value <=5
-                if dset1[iev]<=5:
-                    # get indices
-                    ind_L = int(dset1[iev]*2)
-                    ind_tot = (ind_L-1)*9 + ip
-                    Clist[ind_tot][0] = flux
+                B[0] = Bfield
                     
                 tree.Fill()
 

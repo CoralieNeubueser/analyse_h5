@@ -26,6 +26,11 @@ elif args.hepp:
 
     
 if not args.merge and not args.ana:
+
+    if len(datapaths) < runs:
+        print("Only {} files available for reading. ".format(len(datapaths)))
+        runs = len(datapaths)
+
     for irun,run in enumerate(datapaths):
         if irun>(runs-1):
             break
@@ -70,5 +75,13 @@ elif args.merge:
         mge = 'root/all_hepp_'+str(runs)+'runs.root'
         runList = glob.glob('root/CSES_01_HEP_1_*.root')
 
-    print("Merge all files in: ", mge)
+    if len(runList) < runs:
+        print("Only {} files available for merge. ".format(len(runList)))
+        runs = len(runList)
+        if args.hepd:
+            mge = 'root/all_hepd_'+str(runs)+'runs.root'
+        elif args.hepp:
+            mge = 'root/all_hepp_'+str(runs)+'runs.root'
+
+    print("Merge files in: ", mge)
     merge(mge, runList, runs)

@@ -16,6 +16,7 @@ os.system('source /opt/exp_software/limadou/set_env_standalone.sh')
 datapaths = []
 if args.hepd:
     datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*.h5')
+# select HEPP data from 22-26.02.2019 (solar quiet period)
 elif args.hepp:
     datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190222*.h5')
     datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190223*.h5')
@@ -32,7 +33,7 @@ if not args.merge and not args.ana:
 
         print("Test if output exists: ", outfile)
         if os.path.isfile(outfile):
-            print("Output root file already exists... \n run analysis on the next run. ")
+            print("Output root file already exists... \n read in the next file. ")
             runs=runs+1
         else:
             cmd='python3 python/readH5.py --inputFile '+str(run)
@@ -45,10 +46,10 @@ if not args.merge and not args.ana:
             print(cmd)
             os.system(cmd)
 
-# run analysis on single root files
+# run analysis on single merged root file
 elif args.ana:
-    print("Run some analysis on single file.")
     mge = 'root/all_hepd_'+str(runs)+'runs.root'
+    print("Run analysis on single file: ", str(mge))
     if args.hepp:
         mge = 'root/all_hepp_'+str(runs)+'runs.root'
 

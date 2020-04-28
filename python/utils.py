@@ -49,7 +49,7 @@ def home():
     return os.getcwd()
 
 def merge(name, listOfFiles, runs):
-    ch=r.TChain("tree")  # creates a chain to process a Tree called "T"
+    ch=r.TChain("tree")  # creates a chain to process a Tree called "tree"
     hist2D_l_pitch=r.TH2D("hist2D_l_pitch","hist2D_l_pitch",18,1,10,9,10.,190.)
     hist2D_loc=r.TH2D("hist2D_loc","hist2D_loc",361,-180.5,180.5,181,-90.5,90.5)
     hist2D_loc_flux=r.TH2D("hist2D_loc_flux","hist2D_loc_flux",361,-180.5,180.5,181,-90.5,90.5)
@@ -121,17 +121,75 @@ def merge(name, listOfFiles, runs):
     outRoot.Close()
     return True
 
-def takeSqrt(hist2D,histDiv):
+def takeSqrt(hist2D_old,histDiv):
+
+    # hist2D_old.Sumw2()
+    # rebin hist of flux to hist of entries
+    # if xbins != histDiv.GetNbinsX() or ybins != histDiv.GetNbinsY():
+    print("rebin histogram.")
+    minX=histDiv.GetXaxis().GetBinLowEdge(histDiv.GetXaxis().GetFirst())
+    maxX=histDiv.GetXaxis().GetBinUpEdge(histDiv.GetXaxis().GetLast())
+    minY=histDiv.GetYaxis().GetBinLowEdge(histDiv.GetYaxis().GetFirst())
+    maxY=histDiv.GetYaxis().GetBinUpEdge(histDiv.GetYaxis().GetLast())
+    #print("min bin x : ", minX)
+    #print("max bin x : ", maxX)
+    #print("min bin y : ", minY)
+    #print("max bin y : ", maxY)
+    hist2D_rebin = r.TH2D(hist2D_old.GetName()+str("_rebin"), hist2D_old.GetName()+str("_rebin"), histDiv.GetNbinsX(), minX, maxX, histDiv.GetNbinsY(), minY, maxY )
+    
+    for binx in range(0,hist2D_old.GetNbinsX()+1):
+        for biny in range(0,hist2D_old.GetNbinsY()+1):
+            bint = hist2D_old.GetBin(binx,biny)
+            bincy = hist2D_old.GetYaxis().GetBinCenter(bint)
+            bincx = hist2D_old.GetXaxis().GetBinCenter(bint)
+            cont = hist2D_old.GetBinContent(bint)
+            if cont!=0:
+                print(bincx, bincy, cont)
+                hist2D_rebin.Fill(bincx, bincy, cont)
+
+    # normalise histogram
+    #print("new hist bins x :  ",hist2D_rebin.GetNbinsX())
+    #print("norm hist bins x : ",histDiv.GetNbinsX())
+    #print("new hist bins y :  ",hist2D_rebin.GetNbinsY())
+    #print("norm hist bins y : ",histDiv.GetNbinsY())
+    hist2D_rebin.Divide(histDiv)
+    xbins_r = hist2D_rebin.GetNbinsX()
+    ybins_r = hist2D_rebin.GetNbinsY()
+    
+    # take sqrt of entries to retrieve RMS
+    for binx in range(0,xbins_r+1):
+        for biny in range(0,ybins_r+1):
+            bint = hist2D_rebin.GetBin(binx,biny)
+            cont = hist2D_rebin.GetBinContent(bint)
+            hist2D_rebin.SetBinContent(bint,np.sqrt(cont))
+
+    return hist2D_rebin
+
+def divideHists(hist2D,histDiv):
 
     hist2D.Sumw2()
-    hist2D.Divide(histDiv)
-    xbins = hist2D.GetNbinsX()
-    ybins = hist2D.GetNbinsY()
     
-    for binx in range(0,xbins+1):
-        for biny in range(0,ybins+1):
-            bint = hist2D.GetBin(binx,biny)
-            cont = hist2D.GetBinContent(bint)
-            hist2D.SetBinContent(bint,np.sqrt(cont))
+    # rebin hist of flux to hist of entries
+    minX=histDiv.GetXaxis().GetBinLowEdge(histDiv.GetXaxis().GetFirst())
+    maxX=histDiv.GetXaxis().GetBinUpEdge(histDiv.GetXaxis().GetLast())
+    minY=histDiv.GetYaxis().GetBinLowEdge(histDiv.GetYaxis().GetFirst())
+    maxY=histDiv.GetYaxis().GetBinUpEdge(histDiv.GetYaxis().GetLast())
+    #print("min bin x : ", minX)
+    #print("max bin x : ", maxX)
+    #print("min bin y : ", minY)
+    #print("max bin y : ", maxY)
+    hist2D_rebin = r.TH2D(hist2D.GetName()+str("_rebin"), hist2D.GetName()+str("_rebin"), histDiv.GetNbinsX(), minX, maxX, histDiv.GetNbinsY(), minY, maxY )
 
-    return hist2D
+    for binx in range(0,hist2D.GetNbinsX()+1):
+        for biny in range(0,hist2D.GetNbinsY()+1):
+            bint = hist2D.GetBin(binx,biny)
+            bincx = hist2D.GetXaxis().GetBinCenter(bint)
+            bincy = hist2D.GetYaxis().GetBinCenter(bint)
+            cont = hist2D.GetBinContent(bint)
+            if cont != 0:
+                hist2D_rebin.Fill(bincx, bincy, cont)
+            
+    # normalise histogram
+    hist2D_rebin.Divide(histDiv)
+
+    return hist2D_rebin

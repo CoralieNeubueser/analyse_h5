@@ -11,20 +11,14 @@ parser.add_argument('-q','--quiet', action='store_true', help='Run without print
 args,_=parser.parse_known_args()
 
 runs = args.numRuns
-os.system('source /opt/exp_software/limadou/set_env_standalone.sh')
+# os.system('source /opt/exp_software/limadou/set_env_standalone.sh')
 
 datapaths = []
 if args.hepd:
-    datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*.h5')
-# select HEPP data from 22-26.02.2019 (solar quiet period)
+    datapaths = glob.glob(home()+'/data/CSES_HEP_DDD_*.h5')
 elif args.hepp:
-    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190222*.h5')
-    datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190223*.h5')
-    datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190224*.h5')
-    datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190225*.h5')
-    datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190226*.h5')
+    datapaths += glob.glob(home()+'/data/CSES_01_HEP_1_L02*.h5')
 
-    
 if not args.merge and not args.ana:
 
     if len(datapaths) < runs:

@@ -3,6 +3,7 @@ import math
 import matplotlib as plt
 import numpy as np
 from array import array
+import pathlib
 # load defined functions
 from utils import *
 
@@ -64,9 +65,17 @@ if (time_max-time_min)/60<30: # in minutes
     #os.system('rm {}').format(filename))
     sys.exit(("This file {} is not used, due to incomplete semi-orbit. ").format(filename))
 
-# prepare root output                            
-outRootName = os.path.split(filename)[1].replace("h5","root")
-outRootName = home()+"/root/"+outRootName
+# prepare root output
+outRootDir = os.path.split(filename)[0]
+if outRootDir.find('L3_test'):
+    print(os.path.split(outRootDir)[1])
+    useDir = home()+"/root/L3_test/"+os.path.split(outRootDir)[1]+'/'
+    pathlib.Path(useDir).mkdir(parents=True, exist_ok=True) 
+    outRootName = useDir+os.path.split(filename)[1].replace("h5","root")
+else:
+    outRootName = os.path.split(filename)[1].replace("h5","root")
+    outRootName = home()+"/root/"+outRootName
+
 if args.debug:
     print("Writing output into root file: ", outRootName)
 outRoot = r.TFile( outRootName , 'recreate' )
@@ -77,7 +86,7 @@ E = array( 'f', [ 0. ] )
 C = array( 'f', [ 0. ] )
 F_vec =r.std.vector(float)(energy_bins)
 T = array( 'f', [ 0. ] )
-Tday = array( 'i', [ 0 ] )
+Tday = r.vector('string')()
 Lo = array( 'i', [ 0 ] )
 La = array( 'i', [ 0 ] )
 B = array( 'f', [ 0. ] )
@@ -87,8 +96,8 @@ tree.Branch( 'pitch', P, 'pitch/F' )
 tree.Branch( 'energy', E, 'energy/F' )
 tree.Branch( 'count', C, 'count/F' )
 tree.Branch( 'flux_en', F_vec )
-tree.Branch( 'time', T, 'time/F' )
-tree.Branch( 'day', Tday, 'day/I' )
+tree.Branch( 'time', T, 'time/I' )
+tree.Branch( 'day', Tday )
 tree.Branch( 'Long', Lo, 'Long/I' )
 tree.Branch( 'Lat', La, 'Lat/I' )
 tree.Branch( 'field', B, 'field/F' )
@@ -103,12 +112,13 @@ for iev,ev in enumerate(dset2):
     lonInt = int(0)
     latInt = int(0)
     Bfield = float(0.)
-    day = int(0)
+    day = str()
+    
     if args.data=='hepd':
         # fill tree and histograms for HEPD data
         time_calc = 60*60*int(str(dset_time[iev])[-6:-4]) + 60*int(str(dset_time[iev])[-4:-2]) + int(str(dset_time[iev])[-2:])
         time_act = (time_calc-time_min)/60.
-        day = int(str(dset_time[iev])[-14:-6])
+        day = str(dset_time[iev])[-14:-6]
 
         lonInt = int(dset_lon[iev][0])
         latInt = int(dset_lat[iev][1])
@@ -118,7 +128,7 @@ for iev,ev in enumerate(dset2):
         # fill tree and histos for HEPP data 
         time_calc = 60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
         time_act = (time_calc-time_min)/60.
-        day = int(str(dset_time[iev][0])[-14:-6])
+        day = str(dset_time[iev][0])[-14:-6]
 
         lonInt = int(dset_lon[iev])
         latInt = int(dset_lat[iev])
@@ -158,10 +168,10 @@ for iev,ev in enumerate(dset2):
             # fill tree only for non-zero fluxes
             if flux!=0:
                 if iev==1 and args.debug:
-                    print("--- Energy:  ", dset_en[0][ie])
-                    print("--- Pitch:   ", dset_p[0][ip])
-                    print("--- Flux:    ", flux)
-                    print("--- Time:    ", dset_time[iev])
+                    print("--- Energy:          ", dset_en[0][ie])
+                    print("--- Pitch:           ", dset_p[0][ip])
+                    print("--- Flux:            ", flux)
+                    print("--- Day time [h]:    ", time_calc/60/60 )
                                     
                 # HEPP data has stores counts per pitch angle  
                 if args.data=='hepp':
@@ -188,7 +198,7 @@ for iev,ev in enumerate(dset2):
                 F_vec[ie] = flux
                 E[0] = dset_en[0][ie]
                 T[0] = time_calc/60/60 # in hours
-                Tday[0] = day 
+                Tday.push_back(day) 
                 C[0] = countInt
                 Lo[0] = lonInt
                 La[0] = latInt

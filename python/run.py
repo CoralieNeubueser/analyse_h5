@@ -7,6 +7,7 @@ parser.add_argument('--hepd', action='store_true', help='Analyse HEPD data.')
 parser.add_argument('--hepp', action='store_true', help='Analyse HEPP data.')
 parser.add_argument('--merge', action='store_true', help='Merge all runs.')
 parser.add_argument('--ana', action='store_true', help='Analyse all runs.')
+parser.add_argument('--test', action='store_true', help='Analyse test runs.')
 parser.add_argument('-q','--quiet', action='store_true', help='Run without printouts.')
 args,_=parser.parse_known_args()
 
@@ -16,6 +17,12 @@ os.system('source /opt/exp_software/limadou/set_env_standalone.sh')
 datapaths = []
 if args.hepd:
     datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*.h5')
+    if args.test:
+        datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3h5_orig/*.h5')
+        datapaths += glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3h5_rate/*.h5')
+        datapaths += glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3h5_05_95/*.h5')
+        datapaths += glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3h5_rate_05_95/*.h5')
+
 # select HEPP data from 22-26.02.2019 (solar quiet period)
 elif args.hepp:
     datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190222*.h5')
@@ -35,6 +42,9 @@ if not args.merge and not args.ana:
         if irun>(runs-1):
             break
         outfile = home()+"/root/"+(os.path.split(run)[1]).replace("h5","root")
+        if args.test:
+            outRootDir = os.path.split(run)[0]
+            outfile = home()+"/root/L3_test/"+os.path.split(outRootDir)[1]+'/'+(os.path.split(run)[1]).replace("h5","root")
 
         print("Test if output exists: ", outfile)
         if os.path.isfile(outfile):

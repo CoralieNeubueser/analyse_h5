@@ -68,7 +68,6 @@ if (time_max-time_min)/60<30: # in minutes
 # prepare root output
 outRootDir = os.path.split(filename)[0]
 if outRootDir.find('L3_test'):
-    print(os.path.split(outRootDir)[1])
     useDir = home()+"/root/L3_test/"+os.path.split(outRootDir)[1]+'/'
     pathlib.Path(useDir).mkdir(parents=True, exist_ok=True) 
     outRootName = useDir+os.path.split(filename)[1].replace("h5","root")
@@ -81,23 +80,31 @@ if args.debug:
 outRoot = r.TFile( outRootName , 'recreate' )
 tree = r.TTree( 'tree', 'tree with histos' )
 L = array( 'f', [ 0. ] )
-P = array( 'f', [ 0. ] )
-E = array( 'f', [ 0. ] )
+N = array('i', [0])
+P_vec = r.std.vector(int)()
+E_vec = r.std.vector(float)()
 C = array( 'f', [ 0. ] )
-F_vec =r.std.vector(float)(energy_bins)
+F_vec_en = r.std.vector(float)(energy_bins)
+F_vec_pt = r.std.vector(float)(9)
+F_vecvec = r.std.vector(float)(energy_bins*9)
 T = array( 'f', [ 0. ] )
-Tday = r.vector('string')()
+Tday = array( 'i', [0] )
 Lo = array( 'i', [ 0 ] )
 La = array( 'i', [ 0 ] )
 B = array( 'f', [ 0. ] )
+Ev = array( 'i', [ 0 ] )
             
+tree.Branch( 'event', Ev, 'event/I' )
 tree.Branch( 'L', L, 'L/F' )
-tree.Branch( 'pitch', P, 'pitch/F' )
-tree.Branch( 'energy', E, 'energy/F' )
+tree.Branch( 'pitch', P_vec) # 'pitch[9]/I' )
+tree.Branch( 'energy', E_vec) # 'energy['+str(energy_bins)+']/F' )
 tree.Branch( 'count', C, 'count/F' )
-tree.Branch( 'flux_en', F_vec )
+tree.Branch( 'nflux', N, 'nflux/I' )
+tree.Branch( 'flux_en', F_vec_en) # 'flux_en['+str(energy_bins)+']/F' )
+tree.Branch( 'flux_pt', F_vec_pt) # 'flux_pt[9]/F' )
+tree.Branch( 'flux', F_vecvec) # 'flux['+str(int(9*energy_bins))+']/F' )
 tree.Branch( 'time', T, 'time/I' )
-tree.Branch( 'day', Tday )
+tree.Branch( 'day', Tday, 'day/I' )
 tree.Branch( 'Long', Lo, 'Long/I' )
 tree.Branch( 'Lat', La, 'Lat/I' )
 tree.Branch( 'field', B, 'field/F' )
@@ -112,13 +119,13 @@ for iev,ev in enumerate(dset2):
     lonInt = int(0)
     latInt = int(0)
     Bfield = float(0.)
-    day = str()
-    
+    day = int()
+
     if args.data=='hepd':
         # fill tree and histograms for HEPD data
         time_calc = 60*60*int(str(dset_time[iev])[-6:-4]) + 60*int(str(dset_time[iev])[-4:-2]) + int(str(dset_time[iev])[-2:])
         time_act = (time_calc-time_min)/60.
-        day = str(dset_time[iev])[-14:-6]
+        day = int(str(dset_time[iev])[-14:-6])
 
         lonInt = int(dset_lon[iev][0])
         latInt = int(dset_lat[iev][1])
@@ -128,7 +135,7 @@ for iev,ev in enumerate(dset2):
         # fill tree and histos for HEPP data 
         time_calc = 60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
         time_act = (time_calc-time_min)/60.
-        day = str(dset_time[iev][0])[-14:-6]
+        day = int(str(dset_time[iev][0])[-14:-6])
 
         lonInt = int(dset_lon[iev])
         latInt = int(dset_lat[iev])
@@ -153,6 +160,8 @@ for iev,ev in enumerate(dset2):
         hist2D_loc_field.SetBinContent(bint, Bfield)
 
     countInt = int()
+    countFlux = int(0)
+
     if iev==1 and args.debug:
         print("B field [nT]: ", Bfield)
         print("LON/LAT: {}/{}".format(lonInt,latInt) )
@@ -166,16 +175,33 @@ for iev,ev in enumerate(dset2):
         # loop through pitch
         for ip,flux in enumerate(en):
             # fill tree only for non-zero fluxes
-            if flux!=0:
+            if float(flux)!=0:
+                countFlux+=1
                 if iev==1 and args.debug:
                     print("--- Energy:          ", dset_en[0][ie])
                     print("--- Pitch:           ", dset_p[0][ip])
                     print("--- Flux:            ", flux)
                     print("--- Day time [h]:    ", time_calc/60/60 )
-                                    
-                # HEPP data has stores counts per pitch angle  
+                
+                # fill pitch/energy/flux vectors
+                P_vec.push_back(int(dset_p[0][ip]))
+                F_vec_pt[ip] += float(flux) 
+                F_vecvec.push_back(flux)
+
+                # HEPP data has stores counts per 9 different devices (merge all)  
                 if args.data=='hepp':
                     countInt = dset_count[iev][ip]
+                    # rebin the energy range from 256 to 16
+                    maxE = dset_en[0][255]
+                    minE = dset_en[0][0]
+                    binE = (maxE-minE)/16.
+                    newbin = math.floor(ie/16.)
+                    E_vec.push_back(minE+binE*newbin)
+                    F_vec_en[newbin] += flux
+                
+                else:
+                    E_vec.push_back(dset_en[0][ie])
+                    F_vec_en[ie] += flux
                 
                 # fill histograms
                 oldbin = hist2D_l_pitch.FindBin(dset1[iev], dset_p[0][ip]) 
@@ -192,39 +218,45 @@ for iev,ev in enumerate(dset2):
                 else:
                     hist2D_loc_flux.SetBinContent(oldbin1, flux)
 
-                # fill tree
-                L[0] = dset1[iev]
-                P[0] = dset_p[0][ip]
-                F_vec[ie] = flux
-                E[0] = dset_en[0][ie]
-                T[0] = time_calc/60/60 # in hours
-                Tday.push_back(day) 
-                C[0] = countInt
-                Lo[0] = lonInt
-                La[0] = latInt
-                B[0] = Bfield
-                    
-                tree.Fill()
+    # fill tree with measures / 1s
+    Ev[0] = iev
+    L[0] = dset1[iev]
+    T[0] = time_calc/60/60 # in hours
+    Tday[0] = day 
+    C[0] = countInt
+    Lo[0] = lonInt
+    La[0] = latInt
+    B[0] = Bfield
+    N[0] = countFlux
 
+    tree.Fill()
+
+    E_vec.clear()
+    P_vec.clear()
+    F_vec_en.clear()
+    F_vec_pt.clear()
+    F_vecvec.clear()
+    F_vec_pt.resize(9)
+    F_vec_en.resize(energy_bins)
 
 # Print out histrograms                        
-outpdf = os.path.split(filename)[1]
-outpdf = outpdf.replace("h5","pdf")
-if args.data=='hepd':
-    outpdf = outpdf.replace("CSES_HEP","map")
-elif args.data=='hepp':
-    outpdf = outpdf.replace("CSES_01_HEP_1","map")
-outpdf = home()+"/plots/"+outpdf
+#outpdf = os.path.split(filename)[1]
+#outpdf = outpdf.replace("h5","pdf")
+#if args.data=='hepd':
+#    outpdf = outpdf.replace("CSES_HEP","map")
+#elif args.data=='hepp':
+#    outpdf = outpdf.replace("CSES_01_HEP_1","map")
+#outpdf = home()+"/plots/"+outpdf
 
-if args.debug:
-    print("Writing maps to: ", outpdf)
-draw2D(hist2D_l_pitch, "L-value", "pitch [deg]", "#LT electron flux#GT [Hz/(cm^{2}#upoint sr)]", 5e-4, 10, outpdf, True)
-outpdf = outpdf.replace("map","loc")
-draw2D(hist2D_loc, "longitude [deg]", "latitude [deg]", "#Delta t [min]", 1, 35, outpdf, False)
-outpdf = outpdf.replace("loc","loc_flux")
-draw2D(hist2D_loc_flux, "longitude [deg]", "latitude [deg]", "#LT electron flux#GT [Hz/(cm^{2}#upoint sr)]", 5e-4, 10, outpdf, True)
-outpdf = outpdf.replace("flux","field")
-draw2D(hist2D_loc_field, "longitude [deg]", "latitude [deg]", "B [nT]", 17000, 55000, outpdf, False)
+#if args.debug:
+#    print("Writing maps to: ", outpdf)
+#draw2D(hist2D_l_pitch, "L-value", "pitch [deg]", "#LT electron flux#GT [Hz/(cm^{2}#upoint sr)]", 5e-4, 10, outpdf, True)
+#outpdf = outpdf.replace("map","loc")
+#draw2D(hist2D_loc, "longitude [deg]", "latitude [deg]", "#Delta t [min]", 1, 35, outpdf, False)
+#outpdf = outpdf.replace("loc","loc_flux")
+#draw2D(hist2D_loc_flux, "longitude [deg]", "latitude [deg]", "#LT electron flux#GT [Hz/(cm^{2}#upoint sr)]", 5e-4, 10, outpdf, True)
+#outpdf = outpdf.replace("flux","field")
+#draw2D(hist2D_loc_field, "longitude [deg]", "latitude [deg]", "B [nT]", 17000, 55000, outpdf, False)
 
 outRoot.Write()
 outRoot.Close()

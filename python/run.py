@@ -41,12 +41,15 @@ if not args.merge and not args.ana:
     for irun,run in enumerate(datapaths):
         if irun>(runs-1):
             break
-        outfile = home()+"/root/"+(os.path.split(run)[1]).replace("h5","root")
+        
         if args.test:
             outRootDir = os.path.split(run)[0]
             outfile = home()+"/root/L3_test/"+os.path.split(outRootDir)[1]+'/'+(os.path.split(run)[1]).replace("h5","root")
-
-        print("Test if output exists: ", outfile)
+        else:
+            outfile = home()+"/root/"+(os.path.split(run)[1]).replace("h5","root")
+    
+        
+        #print("Test if output exists: ", outfile)
         if os.path.isfile(outfile):
             print("Output root file already exists... \n read in the next file. ")
             runs=runs+1
@@ -62,7 +65,7 @@ if not args.merge and not args.ana:
             os.system(cmd)
 
 # run analysis on single merged root file
-elif args.ana:
+elif args.ana and not args.test:
     mge = 'root/all_hepd_'+str(runs)+'runs.root'
     print("Run analysis on single file: ", str(mge))
     if args.hepp:
@@ -72,8 +75,19 @@ elif args.ana:
     runana='python3 python/analyseRoot.py --inputFile '+str(mge)
     os.system(runana)
 
+elif args.ana and args.test:
+    tests=['L3h5_orig', 'L3h5_rate', 'L3h5_05_95', 'L3h5_rate_05_95']
+    for t in tests:
+        mge = home()+"/root/L3_test/"+t+'/all.root'
+        mge = 'root/all_hepd_'+str(runs)+'runs.root'
+        print("Run analysis on single file: ", str(mge))
+
+        # open root file 
+        runana='python3 python/analyseRoot.py --inputFile '+str(mge)
+        os.system(runana)
+
 # merge all root files
-elif args.merge:
+elif args.merge and not args.test:
     mge=''
     runList=[]
 
@@ -81,6 +95,7 @@ elif args.merge:
         # write 
         mge = 'root/all_hepd_'+str(runs)+'runs.root'
         runList = glob.glob('root/CSES_HEP_DDD_*.root')
+
     elif args.hepp: 
         mge = 'root/all_hepp_'+str(runs)+'runs.root'
         runList = glob.glob('root/CSES_01_HEP_1_*.root')
@@ -95,3 +110,14 @@ elif args.merge:
 
     print("Merge files in: ", mge)
     merge(mge, runList, runs)
+
+elif args.merge and args.test:
+
+    tests=['L3h5_orig', 'L3h5_rate', 'L3h5_05_95', 'L3h5_rate_05_95']
+    for t in tests:    
+        mge = home()+"/root/L3_test/"+t+'/all.root'
+        runList = glob.glob('root/L3_test/'+t+'/CSES_*.root')
+        runs = len(runList)
+        print("Merge files in: ", mge)
+        merge(mge, runList, runs)
+

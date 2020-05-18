@@ -42,3 +42,11 @@ python3 python/run.py --numRuns 1 --hepd --test
 - add ```--merge``` to merge the output root trees to one.
 - add ```--ana``` to get energy bin vise flux distributions and L-pitch maps
 
+# Examples
+to work on the root trees and run higher level analysis, try e.g.:
+~~~
+python3 python/analyseRoot.py --inputFile ...
+~~~
+this example analysis divides the tree into energy bins, and fills histograms. It also implements a cut on the SAA and the correction of the flux for different geometrical factor, see [talk on Ryver](https://contattafiles.s3.us-west-1.amazonaws.com/tnt11944/xPI899xCKI3S9AZ/20200513_LIMADOU_analysis_L3_status.pdf)
+
+

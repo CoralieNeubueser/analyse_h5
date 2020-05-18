@@ -50,7 +50,22 @@ def home():
 
 def merge(name, listOfFiles, runs):
     ch=r.TChain("tree")  # creates a chain to process a Tree called "tree"
-    hist2D_l_pitch=r.TH2D("hist2D_l_pitch","hist2D_l_pitch",18,1,10,9,10.,190.)
+
+    # L bins
+    l_x_bins = []
+    for x in range(0,5):
+        l_x_bins.append(1.+0.2*x)
+    for x in range(0,9):
+        l_x_bins.append(2.+float(x))
+    l_bins=len(l_x_bins)-1
+    # pitch bins              
+    p_x_bins = []
+    for p in range(0,10):
+        p_x_bins.append(p*20)
+    p_bins=len(p_x_bins)
+
+    hist2D_l_pitch=r.TH2D("hist2D_l_pitch","hist2D_l_pitch",l_bins,np.array(l_x_bins),9,0,180)
+    hist2D_l_pitch_en=r.TH2D("hist2D_l_pitch_en","hist2D_l_pitch_en",l_bins,np.array(l_x_bins),9,0,180)
     hist2D_loc=r.TH2D("hist2D_loc","hist2D_loc",361,-180.5,180.5,181,-90.5,90.5)
     hist2D_loc_flux=r.TH2D("hist2D_loc_flux","hist2D_loc_flux",361,-180.5,180.5,181,-90.5,90.5)
     hist2D_loc_field=r.TH2D("hist2D_loc_field","hist2D_loc_field",361,-180.5,180.5,181,-90.5,90.5)
@@ -63,15 +78,17 @@ def merge(name, listOfFiles, runs):
         # open file, get histogram, add without sum over entries
         inRoot = r.TFile( inFile , 'read' )
         h1=r.TH2D()
+        h1_en=r.TH2D()
         h2=r.TH2D()
         h3=r.TH2D()
         h4=r.TH2D()
         r.gDirectory.GetObject('hist2D_l_pitch', h1)
+        r.gDirectory.GetObject('hist2D_l_pitch_en', h1_en)
         r.gDirectory.GetObject('hist2D_loc', h2)
         r.gDirectory.GetObject('hist2D_loc_flux', h3)
         r.gDirectory.GetObject('hist2D_loc_field', h4)
 
-        # fill pitch/L histogram with average
+        # fill pitch/L histogram with sum
         for binx in range(0,h1.GetNbinsX()+1):
             for biny in range(0,h1.GetNbinsY()+1):
                 bint = h1.GetBin(binx,biny)
@@ -79,20 +96,32 @@ def merge(name, listOfFiles, runs):
                 oldcont = hist2D_l_pitch.GetBinContent(bint)
                 if cont!=0.:
                     if oldcont!=0.:
-                        hist2D_l_pitch.SetBinContent(bint, (oldcont+cont)/2.)
+                        hist2D_l_pitch.SetBinContent(bint, oldcont+cont)
                     else:
                         hist2D_l_pitch.SetBinContent(bint, cont)
-        
+
+        # fill pitch/L histogram of entries with sum
+        for binx in range(0,h1_en.GetNbinsX()+1):
+            for biny in range(0,h1_en.GetNbinsY()+1):
+                bint = h1_en.GetBin(binx,biny)
+                cont = h1_en.GetBinContent(bint)
+                oldcont = hist2D_l_pitch_en.GetBinContent(bint)
+                if cont!=0.:
+                    if oldcont!=0.:
+                        hist2D_l_pitch_en.SetBinContent(bint, oldcont+cont)
+                    else:
+                        hist2D_l_pitch_en.SetBinContent(bint, cont)
+
         # loop through all lon/lat
         for binx in range(0,h3.GetNbinsX()+1):
             for biny in range(0,h3.GetNbinsY()+1):
                 bint = h3.GetBin(binx,biny)
-                # fill flux over location histogram with average
+                # fill flux over location histogram with sum
                 cont = h3.GetBinContent(bint)
                 oldcont = hist2D_loc_flux.GetBinContent(bint)
                 if cont!=0.:
                     if oldcont!=0.:
-                        hist2D_loc_flux.SetBinContent(bint, (oldcont+cont)/2.)
+                        hist2D_loc_flux.SetBinContent(bint, oldcont+cont)
                     else:
                         hist2D_loc_flux.SetBinContent(bint, cont)
 
@@ -109,12 +138,14 @@ def merge(name, listOfFiles, runs):
     outRoot = r.TFile(name, 'update')
     r.gStyle.SetPadRightMargin(0.5)
     r.gStyle.SetOptStat(0)
-    prep2D(hist2D_l_pitch, 'L value', 'pitch [deg]', '#LT flux #GT',False)
+    prep2D(hist2D_l_pitch, 'L value', 'pitch [deg]', '#sum{flux}',False)
+    prep2D(hist2D_l_pitch_en, 'L value', 'pitch [deg]', '#entries',False)
     prep2D(hist2D_loc, 'longitude', 'latitude', 'time',False)
     prep2D(hist2D_loc_flux, 'longitude', 'latitude', '#LT flux #GT',False)
     prep2D(hist2D_loc_field, 'longitude', 'latitude', 'field [nT]',False)
 
     hist2D_l_pitch.Write()
+    hist2D_l_pitch_en.Write()
     hist2D_loc.Write()
     hist2D_loc_flux.Write()
     hist2D_loc_field.Write()

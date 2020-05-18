@@ -62,7 +62,6 @@ badRun=False
 # compare time of first and last event and only use here in case that full half-orbit is stored
 if (time_max-time_min)/60<30: # in minutes
     badRun=True
-    #os.system('rm {}').format(filename))
     sys.exit(("This file {} is not used, due to incomplete semi-orbit. ").format(filename))
 
 # prepare root output
@@ -82,6 +81,7 @@ tree = r.TTree( 'tree', 'tree with histos' )
 L = array( 'f', [ 0. ] )
 N = array('i', [0])
 P_vec = r.std.vector(int)()
+A_vec = r.std.vector(float)()
 E_vec = r.std.vector(float)()
 C = array( 'f', [ 0. ] )
 F_vec_en = r.std.vector(float)(energy_bins)
@@ -96,21 +96,46 @@ Ev = array( 'i', [ 0 ] )
             
 tree.Branch( 'event', Ev, 'event/I' )
 tree.Branch( 'L', L, 'L/F' )
-tree.Branch( 'pitch', P_vec) # 'pitch[9]/I' )
-tree.Branch( 'energy', E_vec) # 'energy['+str(energy_bins)+']/F' )
+tree.Branch( 'pitch', P_vec)
+tree.Branch( 'alpha', A_vec)
+tree.Branch( 'energy', E_vec) 
 tree.Branch( 'count', C, 'count/F' )
 tree.Branch( 'nflux', N, 'nflux/I' )
-tree.Branch( 'flux_en', F_vec_en) # 'flux_en['+str(energy_bins)+']/F' )
-tree.Branch( 'flux_pt', F_vec_pt) # 'flux_pt[9]/F' )
-tree.Branch( 'flux', F_vecvec) # 'flux['+str(int(9*energy_bins))+']/F' )
+tree.Branch( 'flux_en', F_vec_en) 
+tree.Branch( 'flux_pt', F_vec_pt) 
+tree.Branch( 'flux', F_vecvec) 
 tree.Branch( 'time', T, 'time/I' )
 tree.Branch( 'day', Tday, 'day/I' )
 tree.Branch( 'Long', Lo, 'Long/I' )
 tree.Branch( 'Lat', La, 'Lat/I' )
 tree.Branch( 'field', B, 'field/F' )
 
+# L bins
+l_x_bins = []
+for x in range(0,5):
+      l_x_bins.append(1.+0.2*x)
+for x in range(0,9):
+      l_x_bins.append(2.+float(x))
+l_bins=len(l_x_bins)-1
+# pitch bins
+p_x_bins = []
+for p in range(0,10):
+    p_x_bins.append(p*20)
+p_bins=len(p_x_bins)
+
+vecCells = []
+
+numCells=0
+for cell_l in range(0,len(l_x_bins)-1):
+    for cell_p in range(0,len(p_x_bins)-1):
+        vecCells.append( r.std.vector(float)() )
+        tree.Branch( 'flux_'+str(l_x_bins[cell_l])+'_'+str(p_x_bins[cell_p]), vecCells[numCells]) 
+        numCells+=1
+print("L-alpha map has {} cells.".format(numCells))
+
 # write 2d histograms
-hist2D_l_pitch=r.TH2D("hist2D_l_pitch","hist2D_l_pitch",18,1,10,len(dset_p[0]),np.amin(dset_p[0])-0.5*(dset_p[0][1]-dset_p[0][0]),np.amax(dset_p[0])+0.5*(dset_p[0][8]-dset_p[0][7]))
+hist2D_l_pitch=r.TH2D("hist2D_l_pitch","hist2D_l_pitch",l_bins,np.array(l_x_bins),len(dset_p[0]),0,np.amax(dset_p[0]))
+hist2D_l_pitch_en=r.TH2D("hist2D_l_pitch_en","hist2D_l_pitch_en",l_bins,np.array(l_x_bins),len(dset_p[0]),0,np.amax(dset_p[0]))
 hist2D_loc=r.TH2D("hist2D_loc","hist2D_loc",361,-180.5,180.5,181,-90.5,90.5)
 hist2D_loc_flux=r.TH2D("hist2D_loc_flux","hist2D_loc_flux",361,-180.5,180.5,181,-90.5,90.5)
 hist2D_loc_field=r.TH2D("hist2D_loc_field","hist2D_loc_field",361,-180.5,180.5,181,-90.5,90.5)
@@ -120,6 +145,7 @@ for iev,ev in enumerate(dset2):
     latInt = int(0)
     Bfield = float(0.)
     day = int()
+    energies = []
 
     if args.data=='hepd':
         # fill tree and histograms for HEPD data
@@ -130,7 +156,12 @@ for iev,ev in enumerate(dset2):
         lonInt = int(dset_lon[iev][0])
         latInt = int(dset_lat[iev][1])
         Bfield = dset_field[iev]
-
+        for ie,en in enumerate(dset_en[0]):
+            if ie==0:
+                energies.append(en/2.)
+            else:
+                energies.append((en+dset_en[0][ie-1])/2.)
+                
     elif args.data=='hepp':
         # fill tree and histos for HEPP data 
         time_calc = 60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
@@ -169,7 +200,7 @@ for iev,ev in enumerate(dset2):
         if args.data=='hepd':
             print("Count:   ", dset_count[iev])
     countInt = dset_count[iev]
-
+    
     # loop through energy bins
     for ie,en in enumerate(ev):
         # loop through pitch
@@ -177,14 +208,21 @@ for iev,ev in enumerate(dset2):
             # fill tree only for non-zero fluxes
             if float(flux)!=0:
                 countFlux+=1
+                Pvalue = (dset_p[0][ip]+dset_p[0][ip-1])/2.
+                if ip==0:
+                    Pvalue = dset_p[0][ip]/2.
+
                 if iev==1 and args.debug:
-                    print("--- Energy:          ", dset_en[0][ie])
-                    print("--- Pitch:           ", dset_p[0][ip])
+
+                    print("--- Energy bin:      ", ie)
+                    print("--- Energy:          ", energies[ie])
+                    print("--- Pitch bin:       ", ip)
+                    print("--- Pitch:           ", Pvalue)
                     print("--- Flux:            ", flux)
                     print("--- Day time [h]:    ", time_calc/60/60 )
                 
                 # fill pitch/energy/flux vectors
-                P_vec.push_back(int(dset_p[0][ip]))
+                P_vec.push_back(int(Pvalue))
                 F_vec_pt[ip] += float(flux) 
                 F_vecvec.push_back(flux)
 
@@ -200,23 +238,27 @@ for iev,ev in enumerate(dset2):
                     F_vec_en[newbin] += flux
                 
                 else:
-                    E_vec.push_back(dset_en[0][ie])
+                    E_vec.push_back(energies[ie])
                     F_vec_en[ie] += flux
-                
-                # fill histograms
-                oldbin = hist2D_l_pitch.FindBin(dset1[iev], dset_p[0][ip]) 
-                oldCount = hist2D_l_pitch.GetBinContent(oldbin)
-                if oldCount != 0.:
-                    hist2D_l_pitch.SetBinContent(oldbin, (oldCount+flux)/2.)
-                else:
-                    hist2D_l_pitch.SetBinContent(oldbin, flux)
 
-                oldbin1 = hist2D_loc_flux.FindBin(lonInt, latInt)
-                oldCount1 = hist2D_loc_flux.GetBinContent(oldbin1)
-                if oldCount1 != 0.:
-                    hist2D_loc_flux.SetBinContent(oldbin1, (oldCount1+flux)/2.)
-                else:
-                    hist2D_loc_flux.SetBinContent(oldbin1, flux)
+                # fill flux branches of L-pitch
+                icell = 0
+                found = False
+                for cell_l in range(0,len(l_x_bins)-1):
+                    for cell_p in range(0,len(p_x_bins)-1):
+                        if l_x_bins[cell_l] < dset1[iev] and l_x_bins[cell_l+1] > dset1[iev]:
+                            if p_x_bins[cell_p] < Pvalue and p_x_bins[cell_p+1] > Pvalue:
+                                found = True
+                                vecCells[icell].push_back(flux)
+                                break
+                        icell+=1
+                    if found==True:
+                        break
+                    
+                # fill histograms
+                hist2D_l_pitch.Fill(dset1[iev], Pvalue, flux)
+                hist2D_l_pitch_en.Fill(dset1[iev], Pvalue)
+                hist2D_loc_flux.Fill(lonInt, latInt, flux)
 
     # fill tree with measures / 1s
     Ev[0] = iev
@@ -231,6 +273,7 @@ for iev,ev in enumerate(dset2):
 
     tree.Fill()
 
+    # clean-up
     E_vec.clear()
     P_vec.clear()
     F_vec_en.clear()
@@ -238,6 +281,12 @@ for iev,ev in enumerate(dset2):
     F_vecvec.clear()
     F_vec_pt.resize(9)
     F_vec_en.resize(energy_bins)
+    for vec in vecCells:
+        vec.clear()
+
+prep2D(hist2D_l_pitch, 'L value', 'pitch [deg]', '#sum flux', False)
+prep2D(hist2D_l_pitch_en, 'L value', 'pitch [deg]', '#entries', False)
+prep2D(hist2D_loc_flux, 'Longitude', 'latitude', '#sum flux', False)
 
 # Print out histrograms                        
 #outpdf = os.path.split(filename)[1]

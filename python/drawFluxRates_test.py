@@ -43,12 +43,12 @@ for filename in filenames:
       inRoot = r.TFile( filename , 'update' )
       
       rates = ['hist_en_' ,'hist_en_log10_', 'hist_en_rate_']
-      rebins = [2, 2, 1000]
+      rebins = [2, 1, 200]
       rangesMaxX = [15, 3, 15]
       rangesMinX = [0, -3, 0]
       if filename.find('rate')>0:
             print(filename)
-            rebins = [1000, 2, 100]
+            rebins = [200, 1, 100]
 
 
       r.gStyle.SetPadRightMargin(0.1)
@@ -75,7 +75,7 @@ for filename in filenames:
                   readThis.SetLineColor(colors[e])
                   readThis.SetMarkerColor(colors[e])
                   readThis.SetMinimum(1)
-                  readThis.SetMaximum(1000*rebins[i])
+                  readThis.SetMaximum(5000*rebins[i])
 
                   if str(filename).find('_rate')>0:
                         readThis.GetXaxis().SetTitle('rate [Hz]')

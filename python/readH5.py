@@ -78,6 +78,7 @@ if args.debug:
     print("Writing output into root file: ", outRootName)
 outRoot = r.TFile( outRootName , 'recreate' )
 tree = r.TTree( 'tree', 'tree with histos' )
+
 L = array( 'f', [ 0. ] )
 N = array('i', [0])
 P_vec = r.std.vector(int)()
@@ -93,7 +94,7 @@ Lo = array( 'i', [ 0 ] )
 La = array( 'i', [ 0 ] )
 B = array( 'f', [ 0. ] )
 Ev = array( 'i', [ 0 ] )
-            
+
 tree.Branch( 'event', Ev, 'event/I' )
 tree.Branch( 'L', L, 'L/F' )
 tree.Branch( 'pitch', P_vec)
@@ -124,7 +125,6 @@ for p in range(0,10):
 p_bins=len(p_x_bins)
 
 vecCells = []
-
 numCells=0
 for cell_l in range(0,len(l_x_bins)-1):
     for cell_p in range(0,len(p_x_bins)-1):
@@ -260,6 +260,7 @@ for iev,ev in enumerate(dset2):
                 hist2D_l_pitch_en.Fill(dset1[iev], Pvalue)
                 hist2D_loc_flux.Fill(lonInt, latInt, flux)
 
+    print(F_map)
     # fill tree with measures / 1s
     Ev[0] = iev
     L[0] = dset1[iev]

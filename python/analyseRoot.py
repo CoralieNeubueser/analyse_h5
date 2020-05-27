@@ -23,6 +23,7 @@ histList1D = []
 histList1D_ln = []
 histList1D_rate = []
 hist2D = []
+hist2D_en = []
 
 energyBins = 12
 energies = [2.0, 6.5, 9.9, 12.2, 14.9, 18.2, 22.3, 27.2, 33.3, 40.7, 49.7, 60.8]
@@ -48,6 +49,7 @@ colors = [1,   920,  632,  416,
 # define cuts
 cut = 'field>25000'
 cutFlux = 'field>25000&&flux!=0'
+treecut = 'ev.field>25000'
 if args.removePoles:
       cutFlux+='&&abs(Lat)<50'
 
@@ -88,7 +90,8 @@ for e in range(energyBins):
       histList1D_ln.append( r.TH1D('hist_en_log10_'+str(energies[e])+'MeV', 'hist_en_log10_'+str(energies[e])+'MeV', 40,-3,3) )
       histList1D_rate.append( r.TH1D('hist_en_rate_'+str(energies[e])+'MeV', 'hist_en_rate_'+str(energies[e])+'MeV', 1000*200,0,1000) )
       # L-pitch maps
-      hist2D.append( r.TH2D('hist2D_en_'+str(energies[e])+'MeV', 'hist2D_en_'+str(energies[e])+'MeV', l_bins,np.array(l_x_bins), 9,0,180) ) 
+      hist2D_en.append( r.TH2D('hist2D_en_'+str(energies[e])+'MeV', 'hist2D_en_'+str(energies[e])+'MeV', l_bins,np.array(l_x_bins), 9,0,180) ) 
+      hist2D.append( r.TH2D('hist2D_flux_'+str(energies[e])+'MeV', 'hist2D_flux_'+str(energies[e])+'MeV', l_bins,np.array(l_x_bins), 9,0,180) )
 
       cutFluxEn = 'field>25000&&flux_en['+str(e)+']!=0'
       if args.removePoles:
@@ -129,20 +132,28 @@ for ev in inRoot.tree:
       ev.L
       ev.pitch
       for enbin in range(energyBins):
-            if ev.flux_en[enbin]!=0:
+            if ev.flux_en[enbin]!=0 and eval(treecut):
                   oldbin = hist2D[enbin].FindBin(ev.L,float(ev.pitch[0]))
                   oldCount = hist2D[enbin].GetBinContent(oldbin)
                   if oldCount != 0.:
-                        hist2D[enbin].SetBinContent(oldbin, (oldCount+ev.flux_en[enbin])/2.)
+                        # fill with flux using new geom factor
+                        hist2D[enbin].SetBinContent(oldbin, oldCount + ev.flux_en[enbin]*ele_GF[enbin]/ele_corr_GF[enbin])
+                        hist2D_en[enbin].SetBinContent(oldbin, hist2D_en[enbin].GetBinContent(hist2D_en[enbin].FindBin(ev.L,float(ev.pitch[0]))) + 1)
                   else:
-                        hist2D[enbin].SetBinContent(oldbin, ev.flux_en[enbin])
+                        hist2D[enbin].SetBinContent(oldbin, ev.flux_en[enbin]*ele_GF[enbin]/ele_corr_GF[enbin])
+                        hist2D_en[enbin].SetBinContent(oldbin, 1)
 
 for enbin in range(energyBins):
       diren = inRoot.GetDirectory("energy_"+str(energies[enbin])+"MeV")
       diren.cd()
+      prep2D(hist2D[enbin], 'L value', 'pitch [deg]', '#sum flux', False)
+      prep2D(hist2D_en[enbin], 'L value', 'pitch [deg]', '#entries', False)
       hist2D[enbin].SetDirectory(0)
       hist2D[enbin].SetDirectory(diren)
       hist2D[enbin].Write('',r.TObject.kOverwrite)
+      hist2D_en[enbin].SetDirectory(0)
+      hist2D_en[enbin].SetDirectory(diren)
+      hist2D_en[enbin].Write('',r.TObject.kOverwrite)
       inRoot.cd()
 
 # SAA cut:

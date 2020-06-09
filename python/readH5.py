@@ -49,11 +49,13 @@ if args.debug:
 
 time_blanc = dset_time[0]
 time_blanc_min = dset_time[maxEv-1]
-energy_bins = 12
+# define expected energy bins
+energy_bins = getEnergyBins(True, False)
+
 if args.data=='hepp':
     time_blanc = dset_time[0][0]
     time_blanc_min = dset_time[maxEv-1][0]
-    energy_bins = 256
+    energy_bins = getEnergyBins(False, True)
 
 time_min = int(str(time_blanc)[-6:-4])*60*60 +  int(str(time_blanc)[-4:-2])*60 +  int(str(time_blanc)[-2:])
 time_max = int(str(time_blanc_min)[-6:-4])*60*60 +  int(str(time_blanc_min)[-4:-2])*60 +  int(str(time_blanc_min)[-2:])
@@ -112,17 +114,9 @@ tree.Branch( 'Lat', La, 'Lat/I' )
 tree.Branch( 'field', B, 'field/F' )
 
 # L bins
-l_x_bins = []
-for x in range(0,5):
-      l_x_bins.append(1.+0.2*x)
-for x in range(0,9):
-      l_x_bins.append(2.+float(x))
-l_bins=len(l_x_bins)-1
+l_bins, l_x_bins = getLbins()
 # pitch bins
-p_x_bins = []
-for p in range(0,10):
-    p_x_bins.append(p*20)
-p_bins=len(p_x_bins)
+p_bins, p_x_bins = getPitchBins()
 
 vecCells = []
 numCells=0
@@ -146,8 +140,9 @@ for iev,ev in enumerate(dset2):
     Bfield = float(0.)
     day = int()
     energies = []
-
+    hepd = False
     if args.data=='hepd':
+        hepd = True
         # fill tree and histograms for HEPD data
         time_calc = 60*60*int(str(dset_time[iev])[-6:-4]) + 60*int(str(dset_time[iev])[-4:-2]) + int(str(dset_time[iev])[-2:])
         time_act = (time_calc-time_min)/60.
@@ -208,12 +203,13 @@ for iev,ev in enumerate(dset2):
             # fill tree only for non-zero fluxes
             if float(flux)!=0:
                 countFlux+=1
+                # correct flux by new geometrical factors
+                flux = flux*getGeomCorr(hepd, ie)
                 Pvalue = (dset_p[0][ip]+dset_p[0][ip-1])/2.
                 if ip==0:
                     Pvalue = dset_p[0][ip]/2.
 
                 if iev==1 and args.debug:
-
                     print("--- Energy bin:      ", ie)
                     print("--- Energy:          ", energies[ie])
                     print("--- Pitch bin:       ", ip)
@@ -260,7 +256,6 @@ for iev,ev in enumerate(dset2):
                 hist2D_l_pitch_en.Fill(dset1[iev], Pvalue)
                 hist2D_loc_flux.Fill(lonInt, latInt, flux)
 
-    print(F_map)
     # fill tree with measures / 1s
     Ev[0] = iev
     L[0] = dset1[iev]

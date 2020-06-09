@@ -18,7 +18,47 @@ def traverse_datasets(hdf_file):
     for path, _ in h5py_dataset_iterator(hdf_file):
         yield path
 
+# define L value bins
+# returns the number of bins and a list of bins
+def getLbins():
+    l_x_bins = []
+    for x in range(0,5):
+        l_x_bins.append(1.+0.2*x)
+    for x in range(0,9):
+        l_x_bins.append(2.+float(x))
+    l_bins=len(l_x_bins)-1
+    return l_bins, l_x_bins
 
+# define pitch bins
+# returns the number of bins and a list of bins
+def getPitchBins():
+    p_x_bins = []
+    for p in range(0,10):
+        p_x_bins.append(p*20)
+    p_bins=len(p_x_bins)
+    return p_bins, p_x_bins
+
+def getEnergyBins(hepd, hepp):
+    if hepd:
+        return 12
+    elif hepp:
+        return 256
+
+def getGeomCorr(hepd, energyBin):
+    # geometrical factors
+    ele_GF = [ 0.76, 188.26, 326.64, 339.65, 344.99, 331.83, 304.73, 263.56, 217.33, 169.48, 117.31, 71.45 ]
+    ele_corr_GF = [ 131.128, 545.639, 560.297, 530.937, 477.827, 413.133, 334.176, 252.3, 204.52, 103.216, 77.5552, 61.1536 ]
+    if hepd:
+        return ele_GF[energyBin]/ele_corr_GF[energyBin]
+    else:
+        return 1.
+
+# for HEPD data
+def getGeomFactor(energyBin):
+    # geometrical factors
+    ele_corr_GF = [ 131.128, 545.639, 560.297, 530.937, 477.827, 413.133, 334.176, 252.3, 204.52, 103.216, 77.5552, 61.1536 ]
+    return ele_corr_GF[energyBin]
+    
 def draw2D(hist2d, xtitle, ytitle, ztitle, zmin, zmax, out, log):
     r.gROOT.SetBatch(True)
     can=r.TCanvas('can_'+str(hist2d.GetName()))

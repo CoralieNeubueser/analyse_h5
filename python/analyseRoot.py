@@ -29,10 +29,6 @@ energyBins = 12
 energies = [2.0, 6.5, 9.9, 12.2, 14.9, 18.2, 22.3, 27.2, 33.3, 40.7, 49.7, 60.8]
 energyMax = 70
 
-# geometrical factors
-ele_GF = [ 0.76, 188.26, 326.64, 339.65, 344.99, 331.83, 304.73, 263.56, 217.33, 169.48, 117.31, 71.45 ]
-ele_corr_GF = [ 131.128, 545.639, 560.297, 530.937, 477.827, 413.133, 334.176, 252.3, 204.52, 103.216, 77.5552, 61.1536 ]
-
 # L bins
 l_x_bins = []
 for x in range(0,5):
@@ -98,9 +94,9 @@ for e in range(energyBins):
             cutFluxEn += '&&abs(Lat)<50'
 
       r.gROOT.SetBatch(True)
-      inRoot.tree.Draw('flux_en['+str(e)+']*'+str(ele_GF[e])+'/'+str(ele_corr_GF[e])+'>>hist_en_'+str(energies[e])+'MeV',cutFluxEn,'')
-      inRoot.tree.Draw('log10(flux_en['+str(e)+']*'+str(ele_GF[e])+'/'+str(ele_corr_GF[e])+')>>hist_en_log10_'+str(energies[e])+'MeV',cutFluxEn,'')
-      inRoot.tree.Draw('flux_en['+str(e)+']*'+str(ele_GF[e])+'>>hist_en_rate_'+str(energies[e])+'MeV',cutFluxEn,'')
+      inRoot.tree.Draw('flux_en['+str(e)+']>>hist_en_'+str(energies[e])+'MeV',cutFluxEn,'')
+      inRoot.tree.Draw('log10(flux_en['+str(e)+']>>hist_en_log10_'+str(energies[e])+'MeV',cutFluxEn,'')
+      inRoot.tree.Draw('flux_en['+str(e)+']*'+str(getGeomFactor[e])+'>>hist_en_rate_'+str(energies[e])+'MeV',cutFluxEn,'')
 
       histList1D[e].GetXaxis().SetTitle("flux [Hz/cm^{2}#upoint sr]")
       histList1D[e].SetLineColor(colors[e])
@@ -136,11 +132,11 @@ for ev in inRoot.tree:
                   oldbin = hist2D[enbin].FindBin(ev.L,float(ev.pitch[0]))
                   oldCount = hist2D[enbin].GetBinContent(oldbin)
                   if oldCount != 0.:
-                        # fill with flux using new geom factor
-                        hist2D[enbin].SetBinContent(oldbin, oldCount + ev.flux_en[enbin]*ele_GF[enbin]/ele_corr_GF[enbin])
+                        # fill with flux
+                        hist2D[enbin].SetBinContent(oldbin, oldCount + ev.flux_en[enbin])
                         hist2D_en[enbin].SetBinContent(oldbin, hist2D_en[enbin].GetBinContent(hist2D_en[enbin].FindBin(ev.L,float(ev.pitch[0]))) + 1)
                   else:
-                        hist2D[enbin].SetBinContent(oldbin, ev.flux_en[enbin]*ele_GF[enbin]/ele_corr_GF[enbin])
+                        hist2D[enbin].SetBinContent(oldbin, ev.flux_en[enbin])
                         hist2D_en[enbin].SetBinContent(oldbin, 1)
 
 for enbin in range(energyBins):

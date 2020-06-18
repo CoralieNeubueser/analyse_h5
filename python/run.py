@@ -118,6 +118,7 @@ elif args.merge and args.test:
         mge = home()+"/root/L3_test/"+t+'/all.root'
         runList = glob.glob('root/L3_test/'+t+'/CSES_*.root')
         runs = len(runList)
-        print("Merge files in: ", mge)
-        merge(mge, runList, runs)
+        if runs>0:
+            print("Merge files in: ", mge)
+            merge(mge, runList, runs)
 

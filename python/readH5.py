@@ -6,6 +6,9 @@ from array import array
 import pathlib
 # load defined functions
 from utils import *
+from drawFunctions import *
+from comlineIGRF import getBfield
+import igrf_utils as iut
 
 r.gStyle.SetPadRightMargin(0.2)
 
@@ -32,10 +35,15 @@ parameters = dict([('hepd', ['L_parameter', 'HEPD_ele_energy_table', 'HEPD_ele_p
 lonlat = dict([('hepd', ['LonLat', 'LonLat'] ),
                ('hepp', ['GEO_LON', 'GEO_LAT'] )
            ])
+gmlonlat = dict([('hepd', ['GMLonLat', 'GMLonLat'] ),
+                 ('hepp', ['MAG_LON', 'MAG_LAT'] )
+             ])
 
 dset1 = f[parameters[args.data][0]][()] 
 dset_lon = f[lonlat[args.data][0]][()]
 dset_lat = f[lonlat[args.data][1]][()]
+dset_gmlon = f[gmlonlat[args.data][0]][()]
+dset_gmlat = f[gmlonlat[args.data][1]][()]
 dset_en = f[parameters[args.data][1]][()]
 dset_p = f[parameters[args.data][2]][()]
 dset2 = f[parameters[args.data][3]][()]
@@ -49,22 +57,25 @@ if args.debug:
 
 time_blanc = dset_time[0]
 time_blanc_min = dset_time[maxEv-1]
+
+### prepare
 # define expected energy bins
-energy_bins = getEnergyBins(True, False)
+energy_bins, energyTab, energyMax = getEnergyBins(True, False)
+# L bins
+l_bins, l_x_bins = getLbins()
+# pitch bins
+p_bins, p_x_bins = getPitchBins()
+# read LUT for determination of Beq, use geodeutic coordinates at equator
+LUT = readLUT()
+# earth radius at equator in km
+RE = 6378.137 
 
 if args.data=='hepp':
     time_blanc = dset_time[0][0]
     time_blanc_min = dset_time[maxEv-1][0]
-    energy_bins = getEnergyBins(False, True)
+    energy_bins, energyTab, energyMax = getEnergyBins(False, True)
 
 time_min = int(str(time_blanc)[-6:-4])*60*60 +  int(str(time_blanc)[-4:-2])*60 +  int(str(time_blanc)[-2:])
-time_max = int(str(time_blanc_min)[-6:-4])*60*60 +  int(str(time_blanc_min)[-4:-2])*60 +  int(str(time_blanc_min)[-2:])
-
-badRun=False
-# compare time of first and last event and only use here in case that full half-orbit is stored
-if (time_max-time_min)/60<30: # in minutes
-    badRun=True
-    sys.exit(("This file {} is not used, due to incomplete semi-orbit. ").format(filename))
 
 # prepare root output
 outRootDir = os.path.split(filename)[0]
@@ -95,6 +106,7 @@ Tday = array( 'i', [0] )
 Lo = array( 'i', [ 0 ] )
 La = array( 'i', [ 0 ] )
 B = array( 'f', [ 0. ] )
+B_eq = array( 'f', [ 0. ] )
 Ev = array( 'i', [ 0 ] )
 
 tree.Branch( 'event', Ev, 'event/I' )
@@ -112,12 +124,9 @@ tree.Branch( 'day', Tday, 'day/I' )
 tree.Branch( 'Long', Lo, 'Long/I' )
 tree.Branch( 'Lat', La, 'Lat/I' )
 tree.Branch( 'field', B, 'field/F' )
+tree.Branch( 'field_eq', B_eq, 'field_eq/F' )
 
-# L bins
-l_bins, l_x_bins = getLbins()
-# pitch bins
-p_bins, p_x_bins = getPitchBins()
-
+# define the L-pitch map
 vecCells = []
 numCells=0
 for cell_l in range(0,len(l_x_bins)-1):
@@ -137,8 +146,11 @@ hist2D_loc_field=r.TH2D("hist2D_loc_field","hist2D_loc_field",361,-180.5,180.5,1
 for iev,ev in enumerate(dset2):
     lonInt = int(0)
     latInt = int(0)
+    gmlonInt = int(0)
+    gmlatInt = int(0)
     Bfield = float(0.)
     day = int()
+    Beq = float()
     energies = []
     hepd = False
     if args.data=='hepd':
@@ -147,10 +159,14 @@ for iev,ev in enumerate(dset2):
         time_calc = 60*60*int(str(dset_time[iev])[-6:-4]) + 60*int(str(dset_time[iev])[-4:-2]) + int(str(dset_time[iev])[-2:])
         time_act = (time_calc-time_min)/60.
         day = int(str(dset_time[iev])[-14:-6])
+        year = int(str(dset_time[iev])[-14:-10])
 
         lonInt = int(dset_lon[iev][0])
         latInt = int(dset_lat[iev][1])
+        gmlonInt = int(dset_gmlon[iev][0])
+        gmlatInt = int(dset_gmlat[iev][1])
         Bfield = dset_field[iev]
+        # use bin center as energy values
         for ie,en in enumerate(dset_en[0]):
             if ie==0:
                 energies.append(en/2.)
@@ -162,9 +178,11 @@ for iev,ev in enumerate(dset2):
         time_calc = 60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
         time_act = (time_calc-time_min)/60.
         day = int(str(dset_time[iev][0])[-14:-6])
-
+        year = int(str(dset_time[iev][0])[-14:-10])
         lonInt = int(dset_lon[iev])
         latInt = int(dset_lat[iev])
+        gmlonInt = int(dset_gmlon[iev])
+        gmlatInt = int(dset_gmlat[iev])
         # translate cyclotron frequency w=qe*B/(2pi*me) 1/s to B
         qe = 1.602176634e-19 # C = 1.602176634×10−19 As
         # 1Gs = e-4 T = e-4kg/(As2)
@@ -172,7 +190,9 @@ for iev,ev in enumerate(dset2):
         # w seems to have been wrongly calculated in T instead of Gauss, or in 10kHz
         # translate in nT
         Bfield = dset_field[iev]*me/qe*2*np.pi*1e9
-        
+        # use energy bins as defined in h5 table
+        energies = energyTab
+
     # fill 2D histograms / event
     # time of half-orbit
     binx = hist2D_loc.GetXaxis().FindBin(lonInt)
@@ -185,15 +205,33 @@ for iev,ev in enumerate(dset2):
     if hist2D_loc_field.GetBinContent(bint)==0.: 
         hist2D_loc_field.SetBinContent(bint, Bfield)
 
+    # get B field strength at the equator
+    # getBfield expects the altitude in km and all variables in decimal
+    # altitude measured from earth surface
+    altitude = dset1[iev]*RE - RE
+    Beq = getBeq(dset1[iev]) #field(float(LUT[(gmlonInt, 0)][1]), float(LUT[(gmlonInt, 0)][0]), float(altitude), float(year))
+
+    # do not use this flux measures in case that Beq>B, which is due to the assumption that geom. equator has always geom_lat=0
+    if Beq > Bfield:
+        print("Attention! Beq>B")
+        continue
+
     countInt = int()
     countFlux = int(0)
 
     if iev==1 and args.debug:
-        print("B field [nT]: ", Bfield)
-        print("LON/LAT: {}/{}".format(lonInt,latInt) )
-        print("L-value: ", dset1[iev])
+        print("B field [nT]:           ", Bfield)
+        print("L-value:                ", dset1[iev])
+        print("LON/LAT:                ", lonInt,latInt)
+        print("GMLON/GMLAT:            ", gmlonInt, gmlatInt)
+        print("Re-calculated Lon/Lat:  ", LUT[(gmlonInt, gmlatInt)][0], LUT[(gmlonInt, gmlatInt)][1])
+        print("Lon/Lat at equator:     ", LUT[(gmlonInt, 0)][0], LUT[(gmlonInt, 0)][1])
+        print("Altitude at equator:    ", altitude)
+        print("Beq [nT]:               ", round(Beq,2))
+
         if args.data=='hepd':
             print("Count:   ", dset_count[iev])
+
     countInt = dset_count[iev]
     
     # loop through energy bins
@@ -205,20 +243,8 @@ for iev,ev in enumerate(dset2):
                 countFlux+=1
                 # correct flux by new geometrical factors
                 flux = flux*getGeomCorr(hepd, ie)
-                Pvalue = (dset_p[0][ip]+dset_p[0][ip-1])/2.
-                if ip==0:
-                    Pvalue = dset_p[0][ip]/2.
 
-                if iev==1 and args.debug:
-                    print("--- Energy bin:      ", ie)
-                    print("--- Energy:          ", energies[ie])
-                    print("--- Pitch bin:       ", ip)
-                    print("--- Pitch:           ", Pvalue)
-                    print("--- Flux:            ", flux)
-                    print("--- Day time [h]:    ", time_calc/60/60 )
-                
                 # fill pitch/energy/flux vectors
-                P_vec.push_back(int(Pvalue))
                 F_vec_pt[ip] += float(flux) 
                 F_vecvec.push_back(flux)
 
@@ -232,10 +258,29 @@ for iev,ev in enumerate(dset2):
                     newbin = math.floor(ie/16.)
                     E_vec.push_back(minE+binE*newbin)
                     F_vec_en[newbin] += flux
-                
+                    Pvalue = dset_p[0][ip]
+                    P_vec.push_back(int(Pvalue))
+
                 else:
+                    Pvalue = (dset_p[0][ip]+dset_p[0][ip-1])/2.
+                    if ip==0:
+                        Pvalue = dset_p[0][ip]/2.
+                    P_vec.push_back(int(Pvalue))
                     E_vec.push_back(energies[ie])
                     F_vec_en[ie] += flux
+                
+                # calculate equatorial pitch angle
+                alpha_eq = getAlpha_eq( Pvalue, Bfield, Beq )
+                A_vec.push_back( alpha_eq )
+
+                if iev==1 and args.debug:
+                    print("--- Energy bin:      ", ie)
+                    print("--- Energy:          ", energies[ie])
+                    print("--- Pitch bin:       ", ip)
+                    print("--- Pitch:           ", Pvalue)
+                    print("--- Pitch_eq:        ", alpha_eq)
+                    print("--- Flux:            ", flux)
+                    print("--- Day time [h]:    ", time_calc/60/60 )
 
                 # fill flux branches of L-pitch
                 icell = 0
@@ -243,7 +288,7 @@ for iev,ev in enumerate(dset2):
                 for cell_l in range(0,len(l_x_bins)-1):
                     for cell_p in range(0,len(p_x_bins)-1):
                         if l_x_bins[cell_l] < dset1[iev] and l_x_bins[cell_l+1] > dset1[iev]:
-                            if p_x_bins[cell_p] < Pvalue and p_x_bins[cell_p+1] > Pvalue:
+                            if p_x_bins[cell_p] < alpha_eq and p_x_bins[cell_p+1] > alpha_eq:
                                 found = True
                                 vecCells[icell].push_back(flux)
                                 break
@@ -252,8 +297,8 @@ for iev,ev in enumerate(dset2):
                         break
                     
                 # fill histograms
-                hist2D_l_pitch.Fill(dset1[iev], Pvalue, flux)
-                hist2D_l_pitch_en.Fill(dset1[iev], Pvalue)
+                hist2D_l_pitch.Fill(dset1[iev], alpha_eq, flux)
+                hist2D_l_pitch_en.Fill(dset1[iev], alpha_eq)
                 hist2D_loc_flux.Fill(lonInt, latInt, flux)
 
     # fill tree with measures / 1s
@@ -265,6 +310,7 @@ for iev,ev in enumerate(dset2):
     Lo[0] = lonInt
     La[0] = latInt
     B[0] = Bfield
+    B_eq[0] = Beq
     N[0] = countFlux
 
     tree.Fill()
@@ -272,6 +318,7 @@ for iev,ev in enumerate(dset2):
     # clean-up
     E_vec.clear()
     P_vec.clear()
+    A_vec.clear()
     F_vec_en.clear()
     F_vec_pt.clear()
     F_vecvec.clear()

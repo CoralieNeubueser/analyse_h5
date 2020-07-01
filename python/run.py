@@ -6,6 +6,7 @@ parser.add_argument('--numRuns', type=int, help='Define number of runs to be ana
 parser.add_argument('--hepd', action='store_true', help='Analyse HEPD data.')
 parser.add_argument('--hepp', action='store_true', help='Analyse HEPP data.')
 parser.add_argument('--merge', action='store_true', help='Merge all runs.')
+parser.add_argument('--allHists', action='store_true', help='Merge all runs, including the histograms.')
 parser.add_argument('--ana', action='store_true', help='Analyse all runs.')
 parser.add_argument('--test', action='store_true', help='Analyse test runs.')
 parser.add_argument('-q','--quiet', action='store_true', help='Run without printouts.')
@@ -41,7 +42,17 @@ if not args.merge and not args.ana:
     for irun,run in enumerate(datapaths):
         if irun>(runs-1):
             break
-        
+
+        # test if half-oribit is complete
+        # CSES_HEP_DDD_0027820_20180804_054857_20180804_055523_L3_0000032191
+        OrbitDateTime = re.findall('\d+', run)
+        duration = abs(int(OrbitDateTime[7]) - int(OrbitDateTime[5]))
+
+        if duration < 3000: ## half-orbit not completed
+            print('Not full semi-orbit recorded, but only: '+str(duration)+'[mmss]')
+            print('Try next run..')
+            continue
+
         if args.test:
             outRootDir = os.path.split(run)[0]
             outfile = home()+"/root/L3_test/"+os.path.split(outRootDir)[1]+'/'+(os.path.split(run)[1]).replace("h5","root")
@@ -109,7 +120,7 @@ elif args.merge and not args.test:
             mge = 'root/all_hepp_'+str(runs)+'runs.root'
 
     print("Merge files in: ", mge)
-    merge(mge, runList, runs)
+    merge(mge, runList, runs, args.allHists)
 
 elif args.merge and args.test:
 
@@ -118,6 +129,7 @@ elif args.merge and args.test:
         mge = home()+"/root/L3_test/"+t+'/all.root'
         runList = glob.glob('root/L3_test/'+t+'/CSES_*.root')
         runs = len(runList)
-        print("Merge files in: ", mge)
-        merge(mge, runList, runs)
+        if runs>0:
+            print("Merge files in: ", mge)
+            merge(mge, runList, runs, args.allHists)
 

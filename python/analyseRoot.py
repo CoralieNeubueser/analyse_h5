@@ -5,6 +5,7 @@ import numpy as np
 from array import array
 # load defined functions
 from utils import *
+from drawFunctions import *
 
 r.gStyle.SetOptStat(0)
 
@@ -25,17 +26,11 @@ histList1D_rate = []
 hist2D = []
 hist2D_en = []
 
-energyBins = 12
-energies = [2.0, 6.5, 9.9, 12.2, 14.9, 18.2, 22.3, 27.2, 33.3, 40.7, 49.7, 60.8]
-energyMax = 70
+# retrieve energy bins for either hepd: True, hepp: False
+energyBins, energies, energyMax = getEnergyBins(True, False)
 
 # L bins
-l_x_bins = []
-for x in range(0,5):
-      l_x_bins.append(1+0.2*x)
-for x in range(0,9):
-      l_x_bins.append(2+x)
-l_bins=len(l_x_bins)-1
+l_bins, l_x_bins = getLbins()
 
 # pick color map
 colors = [1,   920,  632,  416,

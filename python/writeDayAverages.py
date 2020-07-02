@@ -87,6 +87,7 @@ for d in lst:
       # stacks and legends to be used for the --drawHistos option
       thstacks = [[r.THStack()] * len(Lbins[0:numLbin]) for x in range(len(energies))]
       tlegends = [[r.TLegend()] * len(Lbins[0:numLbin]) for x in range(len(energies))]
+      tlines = [[[]] * len(Lbins[0:numLbin]) for x in range(len(energies))]
       # write averagesfor all L-p cells / day 
       outFileName = outFilePath+str(d)+'.txt'
       outFile = open(outFileName, 'w')
@@ -137,7 +138,7 @@ for d in lst:
                   # fill hist in corresponding stacks
                   tlegends[energyIndex][lIndex].AddEntry(h, 'L='+str(lValue)+', p='+str(pValue), 'l')
                   thstacks[energyIndex][lIndex].Add(h)
-                  thstacks[energyIndex][lIndex].Add(line)
+                  tlines[energyIndex][lIndex].append(line)
 
             print('legend E entries: ',len(tlegends))
             print('legend L entries: ',len(tlegends[1]))
@@ -156,6 +157,8 @@ for d in lst:
                               st.GetYaxis().SetTitle('# entries')
                               st.SetMinimum(1)
                               tlegends[iest][ifinal].Draw()
+                              for li in tlines[iest][ifinal]:
+                                    li.Draw()
                               can.Modified()
                               outCurves = filename.replace('root','pdf').replace('all', 'day_'+str(d)+'_energy_'+str(energies[iest])+'_L_'+str(Lbins[ifinal]))
                               can.Print(outCurves)

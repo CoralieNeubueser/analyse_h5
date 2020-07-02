@@ -67,38 +67,38 @@ for ev in tree:
     # reject SAA
     if ev.field<25000:
         continue
-    # select an energy bin
-    for en in energy:
-        if en!=energy_selected:
+    
+    for ia,alpha in enumerate(ev.alpha):
+        # select an energy bin 
+        if energy[ia]!=energy_selected:
             continue
+
+        # match L to L bin
+        L_bin = hist1D_L.GetBinLowEdge( hist1D_L.FindBin( L ) )
+        # match alpha to pitch bin
+        alpha_bin = int(hist1D_alpha.GetBinLowEdge( hist1D_alpha.FindBin( alpha ) )) 
         
-        for ia,alpha in enumerate(ev.alpha):
-            # match L to L bin
-            L_bin = hist1D_L.GetBinLowEdge( hist1D_L.FindBin( L ) )
-            # match alpha to pitch bin
-            alpha_bin = int(hist1D_alpha.GetBinLowEdge( hist1D_alpha.FindBin( alpha ) )) 
-        
-            # test if keys exist in dict
-            if (str(L_bin), str(alpha_bin)) in av_Lalpha:
+        # test if keys exist in dict
+        if (str(L_bin), str(alpha_bin)) in av_Lalpha:
             
-                average = float(av_Lalpha[(str(L_bin), str(alpha_bin))][0])
-                rms = float(av_Lalpha[(str(L_bin), str(alpha_bin))][1])            
-                # get daily average in L-alpha cell
-                fiveSigma = average + 5*rms
+            average = float(av_Lalpha[(str(L_bin), str(alpha_bin))][0])
+            rms = float(av_Lalpha[(str(L_bin), str(alpha_bin))][1])            
+            # get daily average in L-alpha cell
+            fiveSigma = average + 5*rms
+            
+            flux = getattr(tree,"flux_"+str(L_bin)+"_"+str(alpha_bin))
+            if len(flux) > ia and flux[ia]>fiveSigma:
+
+                print("L-alpha bins : ", L_bin, alpha_bin)
+                print("average :      ",  average)
+                print("rms :          ",  rms)
+                print('Five sigma: ', fiveSigma)
+                print('Found flux: ',flux[ia])
                 
-                flux = getattr(tree,"flux_"+str(L_bin)+"_"+str(alpha_bin))
-                if len(flux) > ia and flux[ia]>fiveSigma:
-
-                    print("L-alpha bins : ", L_bin, alpha_bin)
-                    print("average :      ",  average)
-                    print("rms :          ",  rms)
-                    print('Five sigma: ', fiveSigma)
-                    print('Found flux: ',flux[ia])
-
-                    hist2D.Fill(L, alpha, flux[ia])
-                    hist2D_en.Fill(L, alpha)
-                    hist2D_loc.Fill(ev.Long, ev.Lat, flux[ia])
-                    hist2D_time.Fill(ev.time,flux[ia])
+                hist2D.Fill(L, alpha, flux[ia])
+                hist2D_en.Fill(L, alpha)
+                hist2D_loc.Fill(ev.Long, ev.Lat, flux[ia])
+                hist2D_time.Fill(ev.time,flux[ia])
 
 prep2D(hist2D, 'L value', '#alpha_eq [deg]', '#sum#Phi', False)
 prep2D(hist2D_en, 'L value', '#alpha_eq [deg]', '#entries', False)

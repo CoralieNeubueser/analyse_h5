@@ -77,6 +77,8 @@ print("To test days: ", lst)
 print("For energies: ", energies)
 
 outFilePath = home()+'/averages/'+str(args.data)+'/'
+if not os.path.exists(outFilePath):
+    os.makedirs(outFilePath)
 
 for d in lst:
       print("Day: ", d)

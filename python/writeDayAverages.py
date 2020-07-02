@@ -34,20 +34,24 @@ print(len(Pbins[0:numPbin-1]), Pbins[0:numPbin-1])
 colors = [920, 843, 416, 600, 616, 432, 900, 800, 1,
           920-9, 843-9, 416-9, 600-9, 616-9, 432-9, 900-9, 800-9, 1]
 
+# this function draws the single histograms per L-alpha cell, and determines the mean/rms etc.
+# it is called in parallel 
 def getParallelMeans(strHist):
       rootfilename = strHist[0]
       inRoot = r.TFile( rootfilename , 'read' )
       plot = strHist[1]
       cut = strHist[2]
       opt = strHist[3]
+      # draw the histogram
       inRoot.tree.Draw(plot, cut, opt)
       hist = r.gDirectory.Get(strHist[4])
       if not hist:
             print('Drawing didnt work...')
             return
       else:
+            # if the histogram more entries than the threshold  
             if ( hist.GetEntries() > threshold ):
-                  # write into txt file
+                  # write mean etc. into txt file
                   with open(strHist[6], 'a') as txtFile:
                         line = strHist[5]+'{} {} {} {} {}\n'.format(hist.GetEntries(), hist.GetMean(), hist.GetMeanError(), hist.GetRMS(), hist.GetRMSError())
                         txtFile.writelines(line)
@@ -78,7 +82,9 @@ for d in lst:
       print("Day: ", d)
       # list of commands to be run in parallel
       commands = []
+      # list of histograms filled in parallel
       th1ds = Manager().list() 
+      # stacks and legends to be used for the --drawHistos option
       thstacks = [[r.THStack()] * len(Lbins[0:numLbin]) for x in range(len(energies))]
       tlegends = [[r.TLegend()] * len(Lbins[0:numLbin]) for x in range(len(energies))]
       # write averagesfor all L-p cells / day 
@@ -124,9 +130,14 @@ for d in lst:
                   # find index of energy and L
                   energyIndex = energies.index(energyValue)
                   lIndex = Lbins.index(lValue)
+                  # add line for 5 sigma cut
+                  fiveSig = h.GetMean() + 5*h.GetRMS()
+                  line = r.TLine(fiveSig,h.GetMinimum(),fiveSig,h.GetMaximum());
+                  line.SetLineColor(colors[Pbins.index(pValue)])
                   # fill hist in corresponding stacks
                   tlegends[energyIndex][lIndex].AddEntry(h, 'L='+str(lValue)+', p='+str(pValue), 'l')
                   thstacks[energyIndex][lIndex].Add(h)
+                  thstacks[energyIndex][lIndex].Add(line)
 
             print('legend E entries: ',len(tlegends))
             print('legend L entries: ',len(tlegends[1]))

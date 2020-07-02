@@ -215,33 +215,6 @@ def merge(name, listOfFiles, runs, allHists):
     outRoot.Close()
     return True
 
-# read in LUT for geomagnetic to geodeutic coordinates
-# privided by Vincenzo Vitale, 24.06.2020
-# return a dict of geomagnetic long/lat in degree -> geodeutic long/lat
-def readLUT():
-    lut = r.TFile.Open(home()+'/root/LUTs.root', 'r')
-    
-    outDict = {}
-    h2_lon = lut.Get('lon')
-    h2_lat = lut.Get('lat')
-    # print("Geomagnetic longitudes: ", h2_lon.GetNbinsX())
-    # print("Geomagentic latitudes: ", h2_lon.GetNbinsY())
-    for xbin in range(1, h2_lon.GetNbinsX()+1):
-        geom_lon = round(h2_lon.GetXaxis().GetBinCenter(xbin), 0)
-
-        for ybin in range(1, h2_lon.GetNbinsY()+1):
-            geom_lat = round(h2_lon.GetYaxis().GetBinCenter(ybin), 0)
-            # !ATTENTION! assumes the 2d histograms to have the same binning!
-            geod_lon = int( round(h2_lon.GetBinContent(xbin, ybin), 0) )
-            geod_lat = int( round(h2_lat.GetBinContent(xbin, ybin), 0) )
-            key = (geom_lon, geom_lat)
-            if geod_lon==999 or geod_lat==999:
-                continue
-            else:
-                outDict[key] = (geod_lon, geod_lat)
-
-    return outDict
-
 # return magnetic field strenght at geomagnetic equator
 # ref McIlwain1966 'Magnetic coordinates'
 def getBeq(iL):

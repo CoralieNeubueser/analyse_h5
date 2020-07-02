@@ -44,8 +44,9 @@ if not args.merge and not args.ana:
             break
 
         # test if half-oribit is complete
-        # CSES_HEP_DDD_0027820_20180804_054857_20180804_055523_L3_0000032191
+        # find int in string
         OrbitDateTime = re.findall('\d+', run)
+        # calculate time between start and stop of orbit
         duration = abs(int(OrbitDateTime[7]) - int(OrbitDateTime[5]))
 
         if duration < 3000: ## half-orbit not completed
@@ -58,9 +59,8 @@ if not args.merge and not args.ana:
             outfile = home()+"/root/L3_test/"+os.path.split(outRootDir)[1]+'/'+(os.path.split(run)[1]).replace("h5","root")
         else:
             outfile = home()+"/root/"+(os.path.split(run)[1]).replace("h5","root")
-    
-        
-        #print("Test if output exists: ", outfile)
+            
+        # Test if output exists
         if os.path.isfile(outfile):
             print("Output root file already exists... \n read in the next file. ")
             runs=runs+1

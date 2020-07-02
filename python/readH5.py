@@ -7,8 +7,6 @@ import pathlib
 # load defined functions
 from utils import *
 from drawFunctions import *
-from comlineIGRF import getBfield
-import igrf_utils as iut
 
 r.gStyle.SetPadRightMargin(0.2)
 
@@ -65,8 +63,6 @@ energy_bins, energyTab, energyMax = getEnergyBins(True, False)
 l_bins, l_x_bins = getLbins()
 # pitch bins
 p_bins, p_x_bins = getPitchBins()
-# read LUT for determination of Beq, use geodeutic coordinates at equator
-LUT = readLUT()
 # earth radius at equator in km
 RE = 6378.137 
 
@@ -102,7 +98,7 @@ F_vec_en = r.std.vector(float)(energy_bins)
 F_vec_pt = r.std.vector(float)(9)
 F_vecvec = r.std.vector(float)(energy_bins*9)
 T = array( 'f', [ 0. ] )
-Tday = array( 'i', [0] )
+Tday = array( 'f', [0] )
 Lo = array( 'i', [ 0 ] )
 La = array( 'i', [ 0 ] )
 B = array( 'f', [ 0. ] )
@@ -119,7 +115,7 @@ tree.Branch( 'nflux', N, 'nflux/I' )
 tree.Branch( 'flux_en', F_vec_en) 
 tree.Branch( 'flux_pt', F_vec_pt) 
 tree.Branch( 'flux', F_vecvec) 
-tree.Branch( 'time', T, 'time/I' )
+tree.Branch( 'time', T, 'time/F' )
 tree.Branch( 'day', Tday, 'day/I' )
 tree.Branch( 'Long', Lo, 'Long/I' )
 tree.Branch( 'Lat', La, 'Lat/I' )
@@ -158,6 +154,7 @@ for iev,ev in enumerate(dset2):
         # fill tree and histograms for HEPD data
         time_calc = 60*60*int(str(dset_time[iev])[-6:-4]) + 60*int(str(dset_time[iev])[-4:-2]) + int(str(dset_time[iev])[-2:])
         time_act = (time_calc-time_min)/60.
+        daytime = time_calc/60./60.
         day = int(str(dset_time[iev])[-14:-6])
         year = int(str(dset_time[iev])[-14:-10])
 
@@ -177,6 +174,7 @@ for iev,ev in enumerate(dset2):
         # fill tree and histos for HEPP data 
         time_calc = 60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
         time_act = (time_calc-time_min)/60.
+        daytime = time_calc/60./60.
         day = int(str(dset_time[iev][0])[-14:-6])
         year = int(str(dset_time[iev][0])[-14:-10])
         lonInt = int(dset_lon[iev])
@@ -206,10 +204,7 @@ for iev,ev in enumerate(dset2):
         hist2D_loc_field.SetBinContent(bint, Bfield)
 
     # get B field strength at the equator
-    # getBfield expects the altitude in km and all variables in decimal
-    # altitude measured from earth surface
-    altitude = dset1[iev]*RE - RE
-    Beq = getBeq(dset1[iev]) #field(float(LUT[(gmlonInt, 0)][1]), float(LUT[(gmlonInt, 0)][0]), float(altitude), float(year))
+    Beq = getBeq(dset1[iev]) 
 
     # do not use this flux measures in case that Beq>B, which is due to the assumption that geom. equator has always geom_lat=0
     if Beq > Bfield:
@@ -224,9 +219,6 @@ for iev,ev in enumerate(dset2):
         print("L-value:                ", dset1[iev])
         print("LON/LAT:                ", lonInt,latInt)
         print("GMLON/GMLAT:            ", gmlonInt, gmlatInt)
-        print("Re-calculated Lon/Lat:  ", LUT[(gmlonInt, gmlatInt)][0], LUT[(gmlonInt, gmlatInt)][1])
-        print("Lon/Lat at equator:     ", LUT[(gmlonInt, 0)][0], LUT[(gmlonInt, 0)][1])
-        print("Altitude at equator:    ", altitude)
         print("Beq [nT]:               ", round(Beq,2))
 
         if args.data=='hepd':
@@ -305,7 +297,7 @@ for iev,ev in enumerate(dset2):
     Ev[0] = iev
     L[0] = dset1[iev]
     T[0] = time_calc/60/60 # in hours
-    Tday[0] = day 
+    Tday[0] = daytime 
     C[0] = countInt
     Lo[0] = lonInt
     La[0] = latInt

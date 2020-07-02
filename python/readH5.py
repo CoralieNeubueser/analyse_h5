@@ -98,7 +98,7 @@ F_vec_en = r.std.vector(float)(energy_bins)
 F_vec_pt = r.std.vector(float)(9)
 F_vecvec = r.std.vector(float)(energy_bins*9)
 T = array( 'f', [ 0. ] )
-Tday = array( 'f', [0] )
+Tday = array( 'i', [0] )
 Lo = array( 'i', [ 0 ] )
 La = array( 'i', [ 0 ] )
 B = array( 'f', [ 0. ] )
@@ -215,6 +215,7 @@ for iev,ev in enumerate(dset2):
     countFlux = int(0)
 
     if iev==1 and args.debug:
+        print("Day:                    ", day)
         print("B field [nT]:           ", Bfield)
         print("L-value:                ", dset1[iev])
         print("LON/LAT:                ", lonInt,latInt)
@@ -296,8 +297,8 @@ for iev,ev in enumerate(dset2):
     # fill tree with measures / 1s
     Ev[0] = iev
     L[0] = dset1[iev]
-    T[0] = time_calc/60/60 # in hours
-    Tday[0] = daytime 
+    T[0] = daytime # in hours
+    Tday[0] = day 
     C[0] = countInt
     Lo[0] = lonInt
     La[0] = latInt

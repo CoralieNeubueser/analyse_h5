@@ -13,7 +13,7 @@ Environment is set to ```source /opt/exp_software/limadou/set_env_standalone.sh`
 
 Clone the git repository:
 ~~~
-git clone https://github.com/CoralieNeubueser/analyse_h5.git .
+git clone https://github.com/CoralieNeubueser/analyse_h5.git 
 ~~~
 
 # Directory structure

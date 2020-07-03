@@ -50,7 +50,7 @@ def getPitchBins():
 # 3. upper bin edge of last energy bin
 def getEnergyBins(hepd, hepp):
     if hepd:
-        return 12, [2.0, 6.5, 9.9, 12.2, 14.9, 18.2, 22.3, 27.2, 33.3, 40.7, 49.7, 60.8], 70
+        return 12, [2.0, 6.5, 10.0, 12.2, 14.9, 18.2, 22.3, 27.2, 33.3, 40.7, 49.7, 60.8], 70
     elif hepp:
         return 256, [0.1, 0.11137255, 0.1227451,  0.13411765, 0.1454902,  0.15686275,
                      0.1682353 , 0.17960784, 0.1909804 , 0.20235294, 0.21372551, 0.22509804,
@@ -113,6 +113,14 @@ def getGeomFactor(energyBin):
     ele_corr_GF = [ 131.128, 545.639, 560.297, 530.937, 477.827, 413.133, 334.176, 252.3, 204.52, 103.216, 77.5552, 61.1536 ]
     return ele_corr_GF[energyBin]
     
+# return a list of days
+def getDays(tree):
+    lst_days = set()
+    # loop through ev to fill list of days
+    for ev in tree:
+        lst_days.add(ev.day)
+    return lst_days
+
 # helper to merge not only root tree, but the 2D histograms in a file as well
 # specify if neede with bool 'allHists'
 def merge(name, listOfFiles, runs, allHists):

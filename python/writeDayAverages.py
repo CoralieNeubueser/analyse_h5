@@ -64,15 +64,8 @@ def getParallelMeans(strHist):
 filename = args.inputFile
 # read tree                
 inRoot = r.TFile( filename , 'read' )
-lst = set()
-energies = set()
-# loop through ev to fill list of days
-for ev in inRoot.tree:
-      lst.add(ev.day)
-      if ev.event==1:
-            for e in ev.energy:
-                  energies.add(e)
-energies = sorted(energies, key=float)
+lst = getDays(inRoot.tree)
+en_bins, energies, en_max = getEnergyBins(True, False)
 print("To test days: ", lst)
 print("For energies: ", energies)
 

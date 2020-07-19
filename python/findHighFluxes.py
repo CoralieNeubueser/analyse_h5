@@ -60,7 +60,7 @@ out_tree.Branch( 'L', Lshell, 'L/F' )
 out_tree.Branch( 'alpha', Alpha_eq, 'alpha/F' )
 out_tree.Branch( 'energy', Energy, 'energy/F' )
 
-# select a day
+# get a list of all days, for which data was taken
 days = getDays(tree)
 
 count = int(0)

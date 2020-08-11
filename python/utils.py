@@ -1,8 +1,13 @@
 import os,sys,math
+import subprocess
+import time
 import numpy as np
 import ROOT as r
 import h5py
 from drawFunctions import *
+
+
+path_to_INIT = '/opt/exp_software/limadou/set_env_standalone.sh'
 
 def home():
     return os.getcwd()
@@ -48,10 +53,12 @@ def getPitchBins():
 # 1. the number of energy bins for either hepd of hepp data
 # 2. a list of lower edge energy values
 # 3. upper bin edge of last energy bin
-def getEnergyBins(hepd, hepp):
+def getEnergyBins(hepd, rebinned):
     if hepd:
         return 12, [2.0, 6.5, 10.0, 12.2, 14.9, 18.2, 22.3, 27.2, 33.3, 40.7, 49.7, 60.8], 70
-    elif hepp:
+    elif rebinned:
+        return 16, [0.1, 0.28125, 0.4625, 0.64375, 0.825, 1.00625, 1.1875, 1.36875, 1.55, 1.73125, 1.9125, 2.09375, 2.275, 2.45625, 2.6375, 2.81875], 3
+    else:
         return 256, [0.1, 0.11137255, 0.1227451,  0.13411765, 0.1454902,  0.15686275,
                      0.1682353 , 0.17960784, 0.1909804 , 0.20235294, 0.21372551, 0.22509804,
                      0.23647058, 0.24784315, 0.25921568, 0.27058825, 0.28196079, 0.29333335,
@@ -234,7 +241,7 @@ def getBeq(iL):
 def getAlpha_eq(iAlpha, iB, iBeq):
     
     iAlpha_rad = np.radians(iAlpha)
-    if np.sqrt(iBeq/iB) > 1:
+    if iBeq/iB > 1.0:
         alpha_eq = iAlpha_rad
         print("B={}, Beq={}".format(iB,iBeq))
         print("ATTENTION! iBeq/iB>1. This should not happen!")
@@ -247,3 +254,38 @@ def getAlpha_eq(iAlpha, iB, iBeq):
             alpha_eq = np.pi - np.arcsin( np.sin( iAlpha_rad ) * np.sqrt(iBeq/iB) )
 
         return math.degrees(alpha_eq)
+
+#__________________________________________________________
+def getCommandOutput(command):
+    p = subprocess.Popen(command, shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+    stdout,stderr = p.communicate()
+    return {"stdout":stdout, "stderr":stderr, "returncode":p.returncode}
+
+#__________________________________________________________
+def SubmitToCondor(cmd,nbtrials):
+    submissionStatus=0
+    cmd=cmd.replace('//','/')
+    for i in range(nbtrials):
+        outputCMD = getCommandOutput(cmd)
+        print("stderr: ", outputCMD["stderr"])
+        stderr=outputCMD["stderr"].split("\n")
+        stdout=outputCMD["stdout"].split("\n")
+
+        if len(stderr)==1 and stderr[0]=='' :
+            print("------------GOOD SUB")
+            submissionStatus=1
+        else:
+            print("++++++++++++ERROR submitting, will retry")
+            print("Trial : "+str(i)+" / "+str(nbtrials))
+            print("stderr : ",stderr)
+            print("stderr : ",len(stderr))
+
+            time.sleep(10)
+
+        if submissionStatus==1:
+            return 1,0
+
+        if i==nbtrials-1:
+            print("failed sumbmitting after: "+str(nbtrials)+" trials, will exit")
+            return 0,0
+

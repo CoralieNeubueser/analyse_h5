@@ -9,6 +9,7 @@ parser.add_argument('--merge', action='store_true', help='Merge all runs.')
 parser.add_argument('--allHists', action='store_true', help='Merge all runs, including the histograms.')
 parser.add_argument('--ana', action='store_true', help='Analyse all runs.')
 parser.add_argument('--test', action='store_true', help='Analyse test runs.')
+parser.add_argument('--submit', action='store_true', help='Submit to HTCondor batch farm.')
 parser.add_argument('-q','--quiet', action='store_true', help='Run without printouts.')
 args,_=parser.parse_known_args()
 
@@ -24,15 +25,19 @@ if args.hepd:
         datapaths += glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3h5_05_95/*.h5')
         datapaths += glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3h5_rate_05_95/*.h5')
 
-# select HEPP data from 22-26.02.2019 (solar quiet period)
 elif args.hepp:
-    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190222*.h5')
-    datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190223*.h5')
-    datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190224*.h5')
-    datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190225*.h5')
-    datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190226*.h5')
 
+    # get HEPP data of quiet period 1.-5.08.2018
+    datapaths = glob.glob('/home/LIMADOU/cneubueser/public/HEPP_august_2018/*.h5')
     
+    # select HEPP data from 22-26.02.2019 (solar quiet period) 
+    #datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190222*.h5')
+    #datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190223*.h5')
+    #datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190224*.h5')
+    #datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190225*.h5')
+    #datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190226*.h5')
+
+# run on single semi-orbits
 if not args.merge and not args.ana:
 
     if len(datapaths) < runs:
@@ -48,6 +53,8 @@ if not args.merge and not args.ana:
         OrbitDateTime = re.findall('\d+', run)
         # calculate time between start and stop of orbit
         duration = abs(int(OrbitDateTime[7]) - int(OrbitDateTime[5]))
+        if args.hepp:
+            duration = abs(int(OrbitDateTime[5]) - int(OrbitDateTime[3]))
 
         if duration < 3000: ## half-orbit not completed
             print('Not full semi-orbit recorded, but only: '+str(duration)+'[mmss]')
@@ -56,9 +63,9 @@ if not args.merge and not args.ana:
 
         if args.test:
             outRootDir = os.path.split(run)[0]
-            outfile = home()+"/root/L3_test/"+os.path.split(outRootDir)[1]+'/'+(os.path.split(run)[1]).replace("h5","root")
+            outfile = home()+"/data/root/L3_test/"+os.path.split(outRootDir)[1]+'/'+(os.path.split(run)[1]).replace("h5","root")
         else:
-            outfile = home()+"/root/"+(os.path.split(run)[1]).replace("h5","root")
+            outfile = home()+"/data/root/"+(os.path.split(run)[1]).replace("h5","root")
             
         # Test if output exists
         if os.path.isfile(outfile):
@@ -73,14 +80,70 @@ if not args.merge and not args.ana:
             elif args.hepp:
                 cmd+=' --data hepp'
             print(cmd)
-            os.system(cmd)
+
+            if args.submit:
+                runpath, runname = os.path.split(run)
+                logdir = home() + '/log'
+                frunname = 'job_%s.sh'%(str(runname.replace('.h5','')))
+                print(frunname)
+                frun = None
+                try:
+                    frun = open(logdir+'/'+frunname, 'w')
+                except IOError as e:
+                    print("I/O error({0}): {1}".format(e.errno, e.strerror))
+                    time.sleep(10)
+                    frun = open(logdir+'/'+frunname, 'w')
+                print(frun)
+
+                os.system('chmod 777 %s/%s'%(logdir,frunname))
+                frun.write('#!/bin/bash\n')
+                frun.write('unset LD_LIBRARY_PATH\n')
+                frun.write('unset PYTHONHOME\n')
+                frun.write('unset PYTHONPATH\n')
+                frun.write('export JOBDIR=$PWD\n')
+                frun.write('source %s\n' % (path_to_INIT))
+                frun.write('cd %s\n'%(home()))
+                frun.write(cmd+'\n')
+            
+                os.system("mkdir -p %s/out"%logdir)
+                os.system("mkdir -p %s/log"%logdir)
+                os.system("mkdir -p %s/err"%logdir)
+
+                # create also .sub file here 
+                fsubname = frunname.replace('.sh','.sub')
+                fsub = None
+                try:
+                    fsub = open(logdir+'/'+fsubname, 'w')
+                except IOError as e:
+                    print("I/O error({0}): {1}".format(e.errno, e.strerror))
+                    time.sleep(10)
+                    fsub = open(logdir+'/'+fsubname, 'w')
+
+                fsub.write('executable            = %s/%s\n' %(logdir,frunname))
+                fsub.write('arguments             = $(ClusterID) $(ProcId)\n')
+                fsub.write('output                = %s/out/job.%s.$(ClusterId).$(ProcId).out\n'%(logdir,str(irun)))
+                fsub.write('log                   = %s/log/job.%s.$(ClusterId).log\n'%(logdir,str(irun)))
+                fsub.write('error                 = %s/err/job.%s.$(ClusterId).$(ProcId).err\n'%(logdir,str(irun)))
+                fsub.write('RequestCpus = 4\n')        
+                fsub.write('+JobFlavour = "tomorrow"\n')
+                #fsub.write('+AccountingGroup = "group_u_FCC.local_gen"\n')
+                fsub.write('queue 1\n')
+                fsub.close()
+
+                cmdBatch="condor_submit -name sn-01.cr.cnaf.infn.it %s/%s \n"%(logdir,fsubname)
+
+                print(cmdBatch)
+                p = subprocess.Popen(cmdBatch, shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+
+            else:
+                os.system(cmd)
 
 # run analysis on single merged root file
 elif args.ana and not args.test:
-    mge = 'root/all_hepd_'+str(runs)+'runs.root'
+    mge = 'data/root/all_hepd_'+str(runs)+'runs.root'
     print("Run analysis on single file: ", str(mge))
     if args.hepp:
-        mge = 'root/all_hepp_'+str(runs)+'runs.root'
+        mge = 'data/root/all_hepp_'+str(runs)+'runs.root'
 
     # open root file
     runana='python3 python/analyseRoot.py --inputFile '+str(mge)
@@ -89,8 +152,8 @@ elif args.ana and not args.test:
 elif args.ana and args.test:
     tests=['L3h5_orig', 'L3h5_rate', 'L3h5_05_95', 'L3h5_rate_05_95']
     for t in tests:
-        mge = home()+"/root/L3_test/"+t+'/all.root'
-        mge = 'root/all_hepd_'+str(runs)+'runs.root'
+        mge = home()+"/data/root/L3_test/"+t+'/all.root'
+        mge = 'data/root/all_hepd_'+str(runs)+'runs.root'
         print("Run analysis on single file: ", str(mge))
 
         # open root file 
@@ -104,20 +167,20 @@ elif args.merge and not args.test:
 
     if args.hepd:
         # write 
-        mge = 'root/all_hepd_'+str(runs)+'runs.root'
-        runList = glob.glob('root/CSES_HEP_DDD_*.root')
+        mge = 'data/root/all_hepd_'+str(runs)+'runs.root'
+        runList = glob.glob('data/root/CSES_HEP_DDD_*.root')
 
     elif args.hepp: 
-        mge = 'root/all_hepp_'+str(runs)+'runs.root'
-        runList = glob.glob('root/CSES_01_HEP_1_*.root')
+        mge = 'data/root/all_hepp_'+str(runs)+'runs.root'
+        runList = glob.glob('data/root/CSES_01_HEP_1_*.root')
 
     if len(runList) < runs:
         print("Only {} files available for merge. ".format(len(runList)))
         runs = len(runList)
         if args.hepd:
-            mge = 'root/all_hepd_'+str(runs)+'runs.root'
+            mge = 'data/root/all_hepd_'+str(runs)+'runs.root'
         elif args.hepp:
-            mge = 'root/all_hepp_'+str(runs)+'runs.root'
+            mge = 'data/root/all_hepp_'+str(runs)+'runs.root'
 
     print("Merge files in: ", mge)
     merge(mge, runList, runs, args.allHists)
@@ -126,8 +189,8 @@ elif args.merge and args.test:
 
     tests=['L3h5_orig', 'L3h5_rate', 'L3h5_05_95', 'L3h5_rate_05_95']
     for t in tests:    
-        mge = home()+"/root/L3_test/"+t+'/all.root'
-        runList = glob.glob('root/L3_test/'+t+'/CSES_*.root')
+        mge = home()+"/data/root/L3_test/"+t+'/all.root'
+        runList = glob.glob('data/root/L3_test/'+t+'/CSES_*.root')
         runs = len(runList)
         if runs>0:
             print("Merge files in: ", mge)

@@ -11,6 +11,7 @@ r.gStyle.SetOptStat(0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
+parser.add_argument('--thr', type=int, default=5, help='Define minimum sigma for flux values > <phi>+sigma*phi_rms.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 args,_=parser.parse_known_args()
 
@@ -42,6 +43,7 @@ out_tree = r.TTree( 'events', 'tree of fluxes' )
 
 Ev = array('i', [0])
 Flux = array( 'f', [0.] )
+Signal = array( 'f', [0.] )
 Day = array('i', [0])
 Time = array( 'f', [0.] )
 Longitude = array('i', [0])
@@ -52,9 +54,10 @@ Energy = array('f', [0.])
 
 out_tree.Branch( 'event', Ev, 'event/I' )
 out_tree.Branch( 'flux', Flux, 'flux/F' )
+out_tree.Branch( 'signal', Signal, 'signal/F' )
 out_tree.Branch( 'day', Day, 'day/I' )
 out_tree.Branch( 'time', Time, 'time/F' )
-out_tree.Branch( 'long', Longitude, 'long/I' )
+out_tree.Branch( 'lon', Longitude, 'lon/I' )
 out_tree.Branch( 'lat', Latitude, 'lat/I' )
 out_tree.Branch( 'L', Lshell, 'L/F' )
 out_tree.Branch( 'alpha', Alpha_eq, 'alpha/F' )
@@ -112,7 +115,7 @@ for day in days:
                 average = av_Lalpha[energy_bin][(L_bin, alpha_bin)][0]
                 rms = float(av_Lalpha[energy_bin][(L_bin, alpha_bin)][1])
                 # get daily average in L-alpha cell
-                fiveSigma = average + 5*rms
+                fiveSigma = average + args.thr*rms
                 flux = getattr(tree,"flux_"+str(L_bin)+"_"+str(alpha_bin))
                 
                 if len(flux) > ia and flux[ia]>fiveSigma:
@@ -131,6 +134,7 @@ for day in days:
                     # fill output tree
                     Ev[0] = count
                     Flux[0] = flux[ia]
+                    Signal[0] = (flux[ia]-average)/rms
                     Day[0] = day
                     Time[0] = ev.time # daily hours
                     Longitude[0] = ev.Long

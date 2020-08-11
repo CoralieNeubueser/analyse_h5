@@ -27,6 +27,8 @@ numPbin, Pbins = getPitchBins()
 # retrieve threshold
 threshold = args.threshold
 debug = args.debug
+hepd = args.data == 'hepd'
+hepp = args.data == 'hepp'
 
 print(len(Lbins[0:numLbin]), Lbins[0:numLbin])
 print(len(Pbins[0:numPbin-1]), Pbins[0:numPbin-1])
@@ -42,6 +44,8 @@ def getParallelMeans(strHist):
       plot = strHist[1]
       cut = strHist[2]
       opt = strHist[3]
+      if args.debug:
+            print("Draw options: ", plot,cut,opt)
       # draw the histogram
       inRoot.tree.Draw(plot, cut, opt)
       hist = r.gDirectory.Get(strHist[4])
@@ -65,11 +69,23 @@ filename = args.inputFile
 # read tree                
 inRoot = r.TFile( filename , 'read' )
 lst = getDays(inRoot.tree)
-en_bins, energies, en_max = getEnergyBins(True, False)
+en_bins, energies, en_max = getEnergyBins(hepd, hepp)
 print("To test days: ", lst)
+
+test_energies = set()
+for ev in inRoot.tree:
+      if ev.event<1:
+            for e in ev.energy:
+                  test_energies.add(e)
+      else:
+            break
+test_energies = sorted(test_energies, key=float)
+if energies!=test_energies:
+      energies=test_energies
+
 print("For energies: ", energies)
 
-outFilePath = home()+'/averages/'+str(args.data)+'/'
+outFilePath = home()+'/data/averages/'+str(args.data)+'/'
 if not os.path.exists(outFilePath):
     os.makedirs(outFilePath)
 
@@ -84,7 +100,8 @@ for d in lst:
       tlegends = [[r.TLegend()] * len(Lbins[0:numLbin]) for x in range(len(energies))]
       tlines = [[[]] * len(Lbins[0:numLbin]) for x in range(len(energies))]
       # write averagesfor all L-p cells / day 
-      outFileName = outFilePath+str(d)+'.txt'
+      outFileName = outFilePath+str(d)+'_min_'+str(threshold)+'ev.txt'
+      print("Write averages in: ", outFileName)
       outFile = open(outFileName, 'w')
       outFile.write('energy L pitch entries mean meanErr rms rmsErr \n')
       outFile.close()
@@ -92,8 +109,14 @@ for d in lst:
       
       for ien,en in enumerate(energies):
             # get geometrcal factor for meaningful histogram binning 
-            binWidth = 1./getGeomFactor(ien)
-
+            if hepd:
+                  binWidth = 1./getGeomFactor(ien)
+            else:
+                  # hepp data experience much higher flux values in lowest energy bin
+                  if ien==0:
+                        binWidth = 5e2
+                  else:
+                        binWidth = 10
             for iL,L in enumerate(Lbins[0:numLbin]):
                   tlegends[ien][iL] = r.TLegend(0.6,0.5,0.95,.9, 'threshold = '+str(threshold)+' entries')
                   thstacks[ien][iL] = r.THStack('stack_'+str(en)+'_'+str(L), 'stack_'+str(en)+'_'+str(L)) 
@@ -152,8 +175,8 @@ for d in lst:
                               st.GetYaxis().SetTitle('# entries')
                               st.SetMinimum(1)
                               tlegends[iest][ifinal].Draw()
-                              for li in tlines[iest][ifinal]:
-                                    li.Draw()
+                              #for li in tlines[iest][ifinal]:
+                              #      li.Draw()
                               can.Modified()
                               outCurves = filename.replace('root','pdf').replace('all', 'day_'+str(d)+'_energy_'+str(energies[iest])+'_L_'+str(Lbins[ifinal]))
                               can.Print(outCurves)

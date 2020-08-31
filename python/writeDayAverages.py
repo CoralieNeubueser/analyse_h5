@@ -74,7 +74,7 @@ print("To test days: ", lst)
 
 test_energies = set()
 for ev in inRoot.tree:
-      if ev.event<1:
+      if len(test_energies) < en_bins:
             for e in ev.energy:
                   test_energies.add(e)
       else:
@@ -111,18 +111,23 @@ for d in lst:
             # get geometrcal factor for meaningful histogram binning 
             if hepd:
                   binWidth = 1./getGeomFactor(ien)
-            else:
-                  # hepp data experience much higher flux values in lowest energy bin
-                  if ien==0:
-                        binWidth = 5e2
+                  # write in txt file the energy bin center, not the lower edge                                                                                                                                                     
+                  if ien<(len(energies)-1):
+                        energyBinCenter = (en + energies[ien+1])/2.
                   else:
-                        binWidth = 10
+                        energyBinCenter = (en_max + en)/2.
+            else:
+                  energyBinCenter = en
+                  # hepp data experience much higher flux values in lowest energy bin
+                  # but this will not be taken into account in the number of bins of the histogram
+                  binWidth = 10
             for iL,L in enumerate(Lbins[0:numLbin]):
                   tlegends[ien][iL] = r.TLegend(0.6,0.5,0.95,.9, 'threshold = '+str(threshold)+' entries')
                   thstacks[ien][iL] = r.THStack('stack_'+str(en)+'_'+str(L), 'stack_'+str(en)+'_'+str(L)) 
 
                   for iP,P in enumerate(Pbins[0:numPbin-1]):
-                        writeOut = str('{} {} {} '.format(en, L, P))
+
+                        writeOut = str('{} {} {} '.format(energyBinCenter, L, P))
                         histName = 'hist_day_'+str(d)+'_energy_'+str(en)+'_L_'+str(L)+'_p_'+str(P)
                         lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'(50,0,'+str(50*binWidth)+')'), 'field>25000 && energy=='+str(en)+' && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP ]
                         commands.append(lst_comm)

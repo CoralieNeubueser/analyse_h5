@@ -84,13 +84,16 @@ time_min = int(str(time_blanc)[-6:-4])*60*60 +  int(str(time_blanc)[-4:-2])*60 +
 
 # prepare root output
 outRootDir = os.path.split(filename)[0]
-if outRootDir.find('L3_test'):
-    useDir = home()+"/data/root/L3_test/"+os.path.split(outRootDir)[1]+'/'
+print(outRootDir)
+
+if 'L3_test' in outRootDir:
+    useDir = sharedOutPath()+"/data/root/L3_test/"+os.path.split(outRootDir)[1]+'/'
     pathlib.Path(useDir).mkdir(parents=True, exist_ok=True) 
     outRootName = useDir+os.path.split(filename)[1].replace("h5","root")
+    
 else:
     outRootName = os.path.split(filename)[1].replace("h5","root")
-    outRootName = home()+"/data/root/"+outRootName
+    outRootName = sharedOutPath()+"/data/root/"+outRootName
 
 print("Writing output into root file: ", outRootName)
 outRoot = r.TFile( outRootName , 'recreate' )

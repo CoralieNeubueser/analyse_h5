@@ -11,19 +11,22 @@ r.gStyle.SetOptStat(0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
-parser.add_argument('--thr', type=int, default=5, help='Define minimum sigma for flux values > <phi>+sigma*phi_rms.')
+parser.add_argument('--data', type=str, help='Define input data.')
+parser.add_argument('--thr', type=int, default=100, help='Define minimum sigma for flux values > <phi>+sigma*phi_rms.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 args,_=parser.parse_known_args()
 
 filename = args.inputFile
 
-# retrieve energy bins for either hepd: True, hepp: False
-energyBins, energies, energyMax = getEnergyBins(True, False)
-
 # get L/alpha bins
 l_bins, l_x_bins = getLbins()
 numPbin, Pbins = getPitchBins()
-en_bins, energies, en_max = getEnergyBins(True, False)
+
+# retrieve energy bins for either hepd: True, hepp: False
+if args.data=='hepd':
+    en_bins, energies, en_max = getEnergyBins(True, False)
+else:
+    en_bins, energies, en_max = getEnergyBins(False, True)
 
 hist1D_L = r.TH1D('hist1D_L', 'hist1D_L', l_bins, np.array(l_x_bins))
 hist1D_alpha =  r.TH1D('hist1D_alpha', 'hist1D_alpha', numPbin-1, np.array(Pbins,dtype=float))
@@ -36,6 +39,29 @@ av_Lalpha = []
 # read tree
 inRoot = r.TFile( filename , 'update' )
 tree = inRoot.tree
+
+# check if energies in list                                                                                                        
+test_energies = set()
+for ev in inRoot.tree:
+      if len(test_energies) < en_bins:
+            for e in ev.energy:
+                  test_energies.add(e)
+      else:
+            break
+test_energies = sorted(test_energies, key=float)
+if energies!=test_energies:
+      energies=test_energies
+print("Lower edge of energy bins: ", energies)
+
+# use the central energy value of the energy bin
+energyCenter=[]
+for ien,energy in enumerate(energies):
+    if ien<(len(energies)-1):
+        energyBinCenter = (energy + energies[ien+1])/2.
+    else:
+        energyBinCenter = (en_max + energy)/2.
+    energyCenter.append(energyBinCenter)
+print("Central energy value: ", energyCenter)
 
 # output tree
 outRoot = r.TFile( filename.replace('all','all_highFluxes') , 'recreate' )
@@ -79,13 +105,14 @@ for day in days:
         av_Lalpha.append( dict() )
 
     # read in txt files with averages
-    path = 'averages/hepd/'
-    file = open(path+str(day)+".txt", "r")
+    path = 'data/averages/'+args.data+'/'
+    file = open(path+str(day)+'_min_'+str(args.thr)+'ev.txt', "r")
     next(file)
     for line in file:
         columns = [float(i) for i in line.split()]
         col_energy = columns[0]
-        en_index = energies.index( round(col_energy,1) )
+        energyStored = col_energy
+        en_index = energyCenter.index( energyStored )
         # filll dictionary from (L, alpha) -> (mean, rms)
         av_Lalpha[en_index].update( {(columns[1],int(columns[2])):(columns[4],columns[6])} )
         
@@ -107,7 +134,8 @@ for day in days:
             # match alpha to pitch bin
             alpha_bin = int(hist1D_alpha.GetBinLowEdge( hist1D_alpha.FindBin( alpha ) )) 
             # match energy to energy bin
-            energy_bin = energies.index( round(energy[ia],1) )
+            energyStored = energy[ia]
+            energy_bin = energies.index( energyStored )
 
             # test if keys exist in dict
             if (L_bin, alpha_bin) in av_Lalpha[energy_bin]:

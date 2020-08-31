@@ -63,10 +63,11 @@ if not args.merge and not args.ana:
 
         if args.test:
             outRootDir = os.path.split(run)[0]
-            outfile = home()+"/data/root/L3_test/"+os.path.split(outRootDir)[1]+'/'+(os.path.split(run)[1]).replace("h5","root")
+            outfile = sharedOutPath()+"data/root/L3_test/"+os.path.split(outRootDir)[1]+'/'+(os.path.split(run)[1]).replace("h5","root")
         else:
-            outfile = home()+"/data/root/"+(os.path.split(run)[1]).replace("h5","root")
-            
+            outfile = sharedOutPath()+"data/root/"+(os.path.split(run)[1]).replace("h5","root")
+            print(outfile)
+
         # Test if output exists
         if os.path.isfile(outfile):
             print("Output root file already exists... \n read in the next file. ")
@@ -125,7 +126,7 @@ if not args.merge and not args.ana:
                 fsub.write('log                   = %s/log/job.%s.$(ClusterId).log\n'%(logdir,str(irun)))
                 fsub.write('error                 = %s/err/job.%s.$(ClusterId).$(ProcId).err\n'%(logdir,str(irun)))
                 fsub.write('RequestCpus = 4\n')        
-                fsub.write('+JobFlavour = "tomorrow"\n')
+                fsub.write('+JobFlavour = "espresso"\n')
                 #fsub.write('+AccountingGroup = "group_u_FCC.local_gen"\n')
                 fsub.write('queue 1\n')
                 fsub.close()
@@ -140,7 +141,7 @@ if not args.merge and not args.ana:
 
 # run analysis on single merged root file
 elif args.ana and not args.test:
-    mge = 'data/root/all_hepd_'+str(runs)+'runs.root'
+    mge = sharedOutPath()+'data/root/all_hepd_'+str(runs)+'runs.root'
     print("Run analysis on single file: ", str(mge))
     if args.hepp:
         mge = 'data/root/all_hepp_'+str(runs)+'runs.root'
@@ -152,7 +153,7 @@ elif args.ana and not args.test:
 elif args.ana and args.test:
     tests=['L3h5_orig', 'L3h5_rate', 'L3h5_05_95', 'L3h5_rate_05_95']
     for t in tests:
-        mge = home()+"/data/root/L3_test/"+t+'/all.root'
+        mge = sharedOutPath()+"data/root/L3_test/"+t+'/all.root'
         mge = 'data/root/all_hepd_'+str(runs)+'runs.root'
         print("Run analysis on single file: ", str(mge))
 
@@ -189,8 +190,8 @@ elif args.merge and args.test:
 
     tests=['L3h5_orig', 'L3h5_rate', 'L3h5_05_95', 'L3h5_rate_05_95']
     for t in tests:    
-        mge = home()+"/data/root/L3_test/"+t+'/all.root'
-        runList = glob.glob('data/root/L3_test/'+t+'/CSES_*.root')
+        mge = "data/root/L3_test/"+t+'/all.root'
+        runList = glob.glob(sharedOutPath()+'data/root/L3_test/'+t+'/CSES_*.root')
         runs = len(runList)
         if runs>0:
             print("Merge files in: ", mge)

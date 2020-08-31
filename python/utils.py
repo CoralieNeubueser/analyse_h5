@@ -12,6 +12,10 @@ path_to_INIT = '/opt/exp_software/limadou/set_env_standalone.sh'
 def home():
     return os.getcwd()
 
+# define path to shared directory for output file storage
+def sharedOutPath():
+    return '/storage/gpfs_data/limadou/data/flight_data/analysis/'
+
 # read in h5 file
 def traverse_datasets(hdf_file):
 

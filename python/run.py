@@ -6,6 +6,7 @@ parser.add_argument('--numRuns', type=int, help='Define number of runs to be ana
 parser.add_argument('--hepd', action='store_true', help='Analyse HEPD data.')
 parser.add_argument('--hepp', action='store_true', help='Analyse HEPP data.')
 parser.add_argument('--merge', action='store_true', help='Merge all runs.')
+parser.add_argument('--integral', type=int, default=30, help='Define the time window for integration in seconds.')
 parser.add_argument('--allHists', action='store_true', help='Merge all runs, including the histograms.')
 parser.add_argument('--ana', action='store_true', help='Analyse all runs.')
 parser.add_argument('--test', action='store_true', help='Analyse test runs.')
@@ -63,9 +64,9 @@ if not args.merge and not args.ana:
 
         if args.test:
             outRootDir = os.path.split(run)[0]
-            outfile = sharedOutPath()+"data/root/L3_test/"+os.path.split(outRootDir)[1]+'/'+(os.path.split(run)[1]).replace("h5","root")
+            outfile = sharedOutPath()+"data/root/L3_test/"+str(args.integral)+"s/"+os.path.split(outRootDir)[1]+'/'+(os.path.split(run)[1]).replace("h5","root")
         else:
-            outfile = sharedOutPath()+"data/root/"+(os.path.split(run)[1]).replace("h5","root")
+            outfile = sharedOutPath()+"data/root/"+str(args.integral)+"s/"+(os.path.split(run)[1]).replace("h5","root")
             print(outfile)
 
         # Test if output exists
@@ -73,7 +74,7 @@ if not args.merge and not args.ana:
             print("Output root file already exists... \n read in the next file. ")
             runs=runs+1
         else:
-            cmd='python3 python/readH5.py --inputFile '+str(run)
+            cmd='python3 python/readH5.py --integral '+str(args.integral)+' --inputFile '+str(run)
             if not args.quiet:
                 cmd+=' --debug'
             if args.hepd:

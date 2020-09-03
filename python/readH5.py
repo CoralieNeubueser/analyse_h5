@@ -7,18 +7,22 @@ import pathlib
 # load defined functions
 from utils import *
 from drawFunctions import *
+from collections import defaultdict
 
 r.gStyle.SetPadRightMargin(0.2)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
 parser.add_argument('--data', type=str, choices=['hepd','hepp'], required=True, help='Define patht to data file.')
+parser.add_argument('--integral', type=int, default=30, help='Define the time window for integration in seconds.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 args,_=parser.parse_known_args()
 
 filename = args.inputFile
 
 f = h5py.File(filename, 'r')
+
+print("Integrating events over {}s.".format(args.integral))
 
 # read h5 file
 if args.debug:
@@ -87,13 +91,13 @@ outRootDir = os.path.split(filename)[0]
 print(outRootDir)
 
 if 'L3_test' in outRootDir:
-    useDir = sharedOutPath()+"/data/root/L3_test/"+os.path.split(outRootDir)[1]+'/'
+    useDir = sharedOutPath()+"/data/root/L3_test/"+str(args.integral)+"s/"+os.path.split(outRootDir)[1]+'/'
     pathlib.Path(useDir).mkdir(parents=True, exist_ok=True) 
     outRootName = useDir+os.path.split(filename)[1].replace("h5","root")
     
 else:
     outRootName = os.path.split(filename)[1].replace("h5","root")
-    outRootName = sharedOutPath()+"/data/root/"+outRootName
+    outRootName = sharedOutPath()+"/data/root/"+str(args.integral)+"s/"+outRootName
 
 print("Writing output into root file: ", outRootName)
 outRoot = r.TFile( outRootName , 'recreate' )
@@ -149,6 +153,15 @@ hist2D_l_pitch_en=r.TH2D("hist2D_l_pitch_en","hist2D_l_pitch_en",l_bins,np.array
 hist2D_loc=r.TH2D("hist2D_loc","hist2D_loc",361,-180.5,180.5,181,-90.5,90.5)
 hist2D_loc_flux=r.TH2D("hist2D_loc_flux","hist2D_loc_flux",361,-180.5,180.5,181,-90.5,90.5)
 hist2D_loc_field=r.TH2D("hist2D_loc_field","hist2D_loc_field",361,-180.5,180.5,181,-90.5,90.5)
+countEv = 1
+
+BfieldSum = float(0.)
+BeqSum = float(0.)
+vec_en = r.std.vector(float)(energy_bins)
+vec_nEn = r.std.vector(int)(energy_bins)
+vec_pt = r.std.vector(float)(9)
+vec_nPt = r.std.vector(int)(9)
+vecSum = defaultdict(dict)
 
 for iev,ev in enumerate(dset2):
     lonInt = int(0)
@@ -157,188 +170,222 @@ for iev,ev in enumerate(dset2):
     gmlatInt = int(0)
     Bfield = float(0.)
     Lshell = float(0.)
-    day = int()
-    Beq = float()
+    day = int(0)
+    daytime = float(0.)
+    Beq = float(0.)
+
     # use energy bins as defined in h5 table
     energies = energyTab
     countInt = int(0)
     hepd = False
 
-    if args.data=='hepd':
-        hepd = True
-        # fill tree and histograms for HEPD data
-        time_calc = 60*60*int(str(dset_time[iev])[-6:-4]) + 60*int(str(dset_time[iev])[-4:-2]) + int(str(dset_time[iev])[-2:])
-        time_act = (time_calc-time_min)/60.
-        daytime = time_calc/60./60.
-        day = int(str(dset_time[iev])[-14:-6])
-        year = int(str(dset_time[iev])[-14:-10])
+    if math.floor(iev/args.integral) < countEv:
 
-        lonInt = int(dset_lon[iev][0])
-        latInt = int(dset_lat[iev][1])
-        gmlonInt = int(dset_gmlon[iev][0])
-        gmlatInt = int(dset_gmlat[iev][1])
-        Bfield = dset_field[iev]
-        Lshell = dset1[iev]
-        countInt = dset_count[iev]
+        if args.data=='hepd':
+            hepd = True
+            # fill tree and histograms for HEPD data
+            time_calc = 60*60*int(str(dset_time[iev])[-6:-4]) + 60*int(str(dset_time[iev])[-4:-2]) + int(str(dset_time[iev])[-2:])
+            time_act = (time_calc-time_min)/60.
+            daytime += time_calc/60./60.
+            day += int(str(dset_time[iev])[-14:-6])
+            year = int(str(dset_time[iev])[-14:-10])
 
-        #        # use bin center as energy values
-        #        for ie,en in enumerate(dset_en[0]):
-        #            if ie==0:
-        #                energies.append(en/2.)
-        #            else:
-        #                energies.append((en+dset_en[0][ie-1])/2.)
+            lonInt += int(dset_lon[iev][0])
+            latInt += int(dset_lat[iev][1])
+            gmlonInt += int(dset_gmlon[iev][0])
+            gmlatInt += int(dset_gmlat[iev][1])
+            Bfield = dset_field[iev]
+            BfieldSum += Bfield
+            Lshell += dset1[iev]
+            countInt += dset_count[iev]
                 
-    elif args.data=='hepp':
-        # fill tree and histos for HEPP data 
-        time_calc = time_min + iev #60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
-        time_act = (time_calc-time_min)/60.
-        daytime = time_calc/60./60.
-        day = int(str(time_blanc)[-14:-6])
-        year = int(str(time_blanc)[-14:-10])
-        lonInt = int(dset_lon[iev][0])
-        latInt = int(dset_lat[iev][1])
-        gmlonInt = int(dset_gmlon[iev][0])
-        gmlatInt = int(dset_gmlat[iev][1])
-        # translate cyclotron frequency w=qe*B/(2pi*me) 1/s to B
-        qe = 1.602176634e-19 # C = 1.602176634×10−19 As
-        # 1Gs = e-4 T = e-4kg/(As2)
-        me = 9.109383701528e-31 # kg
-        # w seems to have been wrongly calculated in T instead of Gauss, or in 10kHz
-        # translate in nT
-        Bfield = dset_field[iev]*me/qe*2*np.pi*1e9
-        Lshell = dset1[iev]
-        # sum over all channel counts per s
-        for channel_count in dset_count[iev]:
-            countInt += channel_count
+        elif args.data=='hepp':
+            # fill tree and histos for HEPP data 
+            time_calc = time_min + iev #60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
+            time_act = (time_calc-time_min)/60.
+            daytime += time_calc/60./60.
+            day += int(str(time_blanc)[-14:-6])
+            year = int(str(time_blanc)[-14:-10])
 
-    # fill 2D histograms / event
-    # time of half-orbit
-    binx = hist2D_loc.GetXaxis().FindBin(lonInt)
-    biny = hist2D_loc.GetYaxis().FindBin(latInt)
-    bint = hist2D_loc.GetBin(binx,biny,0)
-    if hist2D_loc.GetBinContent(bint)==0.:
-        hist2D_loc.SetBinContent(bint, float(time_act))    
-    # B field of the earth
-    bint = hist2D_loc_field.GetBin(hist2D_loc_field.GetXaxis().FindBin(lonInt),hist2D_loc_field.GetYaxis().FindBin(latInt),0)
-    if hist2D_loc_field.GetBinContent(bint)==0.: 
-        hist2D_loc_field.SetBinContent(bint, Bfield)
+            lonInt += int(dset_lon[iev][0])
+            latInt += int(dset_lat[iev][1])
+            gmlonInt += int(dset_gmlon[iev][0])
+            gmlatInt += int(dset_gmlat[iev][1])
+            # translate cyclotron frequency w=qe*B/(2pi*me) 1/s to B
+            qe = 1.602176634e-19 # C = 1.602176634×10−19 As
+            # 1Gs = e-4 T = e-4kg/(As2)
+            me = 9.109383701528e-31 # kg
+            # w seems to have been wrongly calculated in T instead of Gauss, or in 10kHz
+            # translate in nT
+            Bfield = dset_field[iev]*me/qe*2*np.pi*1e9
+            BfieldSum += Bfield
+            Lshell += dset1[iev]
+            # sum over all channel counts per s
+            for channel_count in dset_count[iev]:
+                countInt += channel_count
 
-    # get B field strength at the equator
-    Beq = getBeq(Lshell) 
-    # in case that Beq>B
-    if Beq > Bfield:
-        if args.debug:
-            print(Beq,Bfield)
-            print(Lshell)
-            print("Attention! Beq>B")
-        # difference found for HEPP-L, probably due to Bfield caluculations??
-        Beq = Bfield
-        #continue
+        # fill 2D histograms / event
+        # time of half-orbit
+        binx = hist2D_loc.GetXaxis().FindBin(lonInt)
+        biny = hist2D_loc.GetYaxis().FindBin(latInt)
+        bint = hist2D_loc.GetBin(binx,biny,0)
+        if hist2D_loc.GetBinContent(bint)==0.:
+            hist2D_loc.SetBinContent(bint, float(time_act))    
+        # B field of the earth
+        bint = hist2D_loc_field.GetBin(hist2D_loc_field.GetXaxis().FindBin(lonInt),hist2D_loc_field.GetYaxis().FindBin(latInt),0)
+        if hist2D_loc_field.GetBinContent(bint)==0.: 
+            hist2D_loc_field.SetBinContent(bint, Bfield)
 
-    countFlux = int(0)
+        # get B field strength at the equator
+        Beq = getBeq(Lshell) 
+        # in case that Beq>B
+        if Beq > Bfield:
+            if args.debug:
+                print(Beq,Bfield)
+                print(Lshell)
+                print("Attention! Beq>B")
+            # difference found for HEPP-L, probably due to Bfield caluculations??
+            Beq = Bfield
+            #continue
 
-    if iev==1 and args.debug:
-        print("Day:                    ", day)
-        print("B field [nT]:           ", Bfield)
-        print("L-value:                ", Lshell)
-        print("LON/LAT:                ", lonInt,latInt)
-        print("GMLON/GMLAT:            ", gmlonInt, gmlatInt)
-        print("Beq [nT]:               ", round(Beq,2))
-        print("Count:   ", countInt)
+        BeqSum += Beq
+        countFlux = int(0)
+        
+        if iev==1 and args.debug:
+            print("Day:                    ", day)
+            print("B field [nT]:           ", Bfield)
+            print("L-value:                ", Lshell)
+            print("LON/LAT:                ", lonInt,latInt)
+            print("GMLON/GMLAT:            ", gmlonInt, gmlatInt)
+            print("Beq [nT]:               ", round(Beq,2))
+            print("Count:   ", countInt)
     
-    # loop through energy bins
-    for ie,en in enumerate(ev):
-        # loop through pitch
-        for ip,flux in enumerate(en):
-            # fill tree only for non-zero fluxes
-            if float(flux)!=0:
-                countFlux+=1
-                # correct flux by new geometrical factors
-                flux = flux*getGeomCorr(hepd, ie)
+        # loop through energy bins
+        for ie,en in enumerate(ev):
+            # loop through pitch
+            for ip,flux in enumerate(en):
+                # fill tree only for non-zero fluxes
+                if float(flux*1e6)!=0.:
+                    countFlux+=1
+                    # correct flux by new geometrical factors
+                    flux = flux*getGeomCorr(hepd, ie)
 
-                # fill pitch/energy/flux vectors
-                F_vec_pt[ip] += float(flux) 
-                F_vecvec.push_back(flux)
-                
-                # HEPP data has stores counts per 9 different devices (merge all)  
-                if not hepd:
-                    countInt = dset_count[iev][ip]
-                    # rebin the energy range from 256 to 16
-                    maxE = dset_en[0][255]
-                    minE = dset_en[0][0]
-                    binE = (maxE-minE)/16.
-                    newbin = math.floor(ie/16.)
-                    E_vec.push_back(float(round(energies[newbin],5)))
-                    F_vec_en[newbin] += flux
-                    Pvalue = dset_p[0][ip]
-                    P_vec.push_back(int(Pvalue))
-                    ie = newbin
+                    # fill pitch/energy/flux vectors
+                    vec_pt[ip] += float(flux)
+                    vec_nPt[ip] += 1 
+                    # F_vecvec.push_back(flux)
+                    if (ie,ip) in vecSum:
+                        vecSum[(ie,ip)] = vecSum[(ie,ip)] + flux
+                    else:
+                        vecSum[(ie,ip)] = flux
 
-                else:
-                    Pvalue = (dset_p[0][ip]+dset_p[0][ip-1])/2.
-                    if ip==0:
-                        Pvalue = dset_p[0][ip]/2.
-                    P_vec.push_back(int(Pvalue))
-                    E_vec.push_back(float(energies[ie]))
-                    F_vec_en[ie] += flux
-                
-                # calculate equatorial pitch angle
-                alpha_eq = getAlpha_eq( Pvalue, Bfield, Beq )
-                A_vec.push_back( alpha_eq )
+                    # HEPP data has stores counts per 9 different devices (merge all)  
+                    if not hepd:
+                        countInt = dset_count[iev][ip]
+                        # rebin the energy range from 256 to 16
+                        maxE = dset_en[0][255]
+                        minE = dset_en[0][0]
+                        binE = (maxE-minE)/16.
+                        newbin = math.floor(ie/16.)
+                        E_vec.push_back(float(round(energies[newbin],5)))
+                        vec_en[newbin] += flux
+                        vec_nEn[newbin] += 1
+                        Pvalue = dset_p[0][ip]
+                        P_vec.push_back(int(Pvalue))
+                        ie = newbin
 
-                if iev==1 and args.debug:
-                    print("--- Energy bin:      ", ie)
-                    print("--- Energy:          ", energies[ie])
-                    print("--- Pitch bin:       ", ip)
-                    print("--- Pitch:           ", Pvalue)
-                    print("--- Pitch_eq:        ", alpha_eq)
-                    print("--- Flux:            ", flux)
-                    print("--- Day time [h]:    ", time_calc/60/60 )
+                    else:
+                        Pvalue = (dset_p[0][ip]+dset_p[0][ip-1])/2.
+                        if ip==0:
+                            Pvalue = dset_p[0][ip]/2.
+                        P_vec.push_back(int(Pvalue))
+                        E_vec.push_back(float(energies[ie]))
+                        vec_en[ie] += flux
+                        vec_nEn[ie] += 1
 
-                # fill flux branches of L-pitch
-                icell = 0
-                found = False
-                for cell_l in range(0,len(l_x_bins)-1):
-                    for cell_p in range(0,len(p_x_bins)-1):
-                        if l_x_bins[cell_l] < Lshell and l_x_bins[cell_l+1] > dset1[iev]:
-                            if p_x_bins[cell_p] < alpha_eq and p_x_bins[cell_p+1] > alpha_eq:
-                                found = True
-                                vecCells[icell].push_back(flux)
-                                break
-                        icell+=1
-                    if found==True:
-                        break
+                    # calculate equatorial pitch angle
+                    alpha_eq = getAlpha_eq( Pvalue, Bfield, Beq )
+                    A_vec.push_back( alpha_eq )
+
+                    if iev==1 and args.debug:
+                        print("--- Energy bin:      ", ie)
+                        print("--- Energy:          ", energies[ie])
+                        print("--- Pitch bin:       ", ip)
+                        print("--- Pitch:           ", Pvalue)
+                        print("--- Pitch_eq:        ", alpha_eq)
+                        print("--- Flux:            ", flux)
+                        print("--- Day time [h]:    ", time_calc/60/60 )
+
+                    # fill flux branches of L-pitch
+                    icell = 0
+                    found = False
+                    for cell_l in range(0,len(l_x_bins)-1):
+                        for cell_p in range(0,len(p_x_bins)-1):
+                            if l_x_bins[cell_l] < Lshell and l_x_bins[cell_l+1] > dset1[iev]:
+                                if p_x_bins[cell_p] < alpha_eq and p_x_bins[cell_p+1] > alpha_eq:
+                                    found = True
+                                    vecCells[icell].push_back(flux)
+                                    break
+                            icell+=1
+                        if found==True:
+                            break
                     
-                # fill histograms
-                hist2D_l_pitch.Fill(Lshell, alpha_eq, flux)
-                hist2D_l_pitch_en.Fill(Lshell, alpha_eq)
-                hist2D_loc_flux.Fill(lonInt, latInt, flux)
+                    # fill histograms
+                    hist2D_l_pitch.Fill(Lshell, alpha_eq, flux)
+                    hist2D_l_pitch_en.Fill(Lshell, alpha_eq)
+                    hist2D_loc_flux.Fill(lonInt, latInt, flux)
 
-    # fill tree with measures / 1s
-    Ev[0] = iev
-    L[0] = Lshell
-    T[0] = daytime # in hours
-    Tday[0] = day 
-    C[0] = countInt
-    Lo[0] = lonInt
-    La[0] = latInt
-    B[0] = Bfield
-    B_eq[0] = Beq
-    N[0] = countFlux
+    elif math.floor(iev/args.integral) == countEv:
+        countEv+=1
 
-    tree.Fill()
+        # fill tree with measures / 1s
+        Ev[0] = int(math.floor(iev / args.integral))
+        L[0] = Lshell / float(args.integral)
+        T[0] = daytime / float(args.integral) # in hours
+        Tday[0] = int(day / float(args.integral))
+        C[0] = countInt / float(args.integral)
+        Lo[0] = int(round(lonInt / args.integral))
+        La[0] = int(round(latInt / args.integral))
+        B[0] = BfieldSum / float(args.integral)
+        B_eq[0] = BeqSum / float(args.integral)
+        N[0] = int(round(countFlux / args.integral))
 
-    # clean-up
-    E_vec.clear()
-    P_vec.clear()
-    A_vec.clear()
-    F_vec_en.clear()
-    F_vec_pt.clear()
-    F_vecvec.clear()
-    F_vec_pt.resize(9)
-    F_vec_en.resize(energy_bins)
-    for vec in vecCells:
-        vec.clear()
+        # normalise flux vectors
+        numPt = 0
+        for ipt,flux_pt in enumerate(vec_pt):
+            F_vec_pt[ipt] = flux_pt / float(args.integral)
+            numPt += vec_nPt[ipt]
+
+        for ien in range(energy_bins):
+            if vec_en[ien]!=0:
+                F_vec_en[ien] = vec_en[ien] / args.integral #vec_nEn[ien]
+                #print('{:.5f}, {:.5f}: {:.5f}'.format(vec_en[ien], vec_nEn[ien], F_vec_en[ien]))
+
+        for (key, value) in vecSum.items():
+            F_vecvec.push_back(value /  args.integral)
+
+        tree.Fill()
+
+        # clean-up
+        vecSum.clear()
+        E_vec.clear()
+        P_vec.clear()
+        A_vec.clear()
+        vec_en.clear()
+        vec_nEn.clear()
+        F_vec_en.clear()
+        vec_pt.clear()
+        vec_nPt.clear()
+        F_vec_pt.clear()
+        F_vecvec.clear()
+        vec_pt.resize(9)
+        vec_nPt.resize(9)
+        F_vec_pt.resize(9)
+        vec_en.resize(energy_bins)
+        vec_nEn.resize(energy_bins)
+        F_vec_en.resize(energy_bins)
+        for vec in vecCells:
+            vec.clear()
 
 prep2D(hist2D_l_pitch, 'L value', '#alpha_{eq} [deg]', '#sum flux', False)
 prep2D(hist2D_l_pitch_en, 'L value', '#alpha_{eq} [deg]', '#entries', False)

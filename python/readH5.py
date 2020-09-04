@@ -107,7 +107,7 @@ E_vec = r.std.vector(float)()
 C = array( 'f', [ 0. ] )
 F_vec_en = r.std.vector(float)(energy_bins)
 F_vec_pt = r.std.vector(float)(9)
-F_vecvec = r.std.vector(float)(energy_bins*9)
+F_vecvec = r.std.vector(float)()
 T = array( 'f', [ 0. ] )
 Tday = array( 'i', [0] )
 Lo = array( 'i', [ 0 ] )
@@ -180,13 +180,6 @@ for iev,ev in enumerate(dset2):
         Bfield = dset_field[iev]
         Lshell = dset1[iev]
         countInt = dset_count[iev]
-
-        #        # use bin center as energy values
-        #        for ie,en in enumerate(dset_en[0]):
-        #            if ie==0:
-        #                energies.append(en/2.)
-        #            else:
-        #                energies.append((en+dset_en[0][ie-1])/2.)
                 
     elif args.data=='hepp':
         # fill tree and histos for HEPP data 
@@ -257,7 +250,9 @@ for iev,ev in enumerate(dset2):
                 flux = flux*getGeomCorr(hepd, ie)
 
                 # fill pitch/energy/flux vectors
-                F_vec_pt[ip] += float(flux) 
+                #print(F_vec_pt[ip])
+                F_vec_pt[ip] += flux
+                #print("{}\n".format(F_vec_pt[ip]))
                 F_vecvec.push_back(flux)
                 
                 # HEPP data has stores counts per 9 different devices (merge all)  
@@ -280,7 +275,7 @@ for iev,ev in enumerate(dset2):
                         Pvalue = dset_p[0][ip]/2.
                     P_vec.push_back(int(Pvalue))
                     E_vec.push_back(float(energies[ie]))
-                    F_vec_en[ie] += flux
+                    F_vec_en[ie] += float(flux)
                 
                 # calculate equatorial pitch angle
                 alpha_eq = getAlpha_eq( Pvalue, Bfield, Beq )
@@ -327,6 +322,9 @@ for iev,ev in enumerate(dset2):
     N[0] = countFlux
 
     tree.Fill()
+
+    print(F_vecvec)
+    print(F_vec_en)
 
     # clean-up
     E_vec.clear()

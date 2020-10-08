@@ -19,6 +19,8 @@ parser.add_argument('--data', type=str, choices=['hepd','hepp'], required=True, 
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 parser.add_argument('--threshold', type=int, default=100, help='Pick a number as minimum statistic in histograms.')
 parser.add_argument('--drawHistos', action='store_true', help='Tell if histograms should be drawn.')
+parser.add_argument('--fit', action='store_true', help='Use an exponential function to fit the distributions.')
+parser.add_argument('--day', type=int, help='Specify a day.')
 args,_=parser.parse_known_args()
 
 # retrieve binning on L/pitch
@@ -44,6 +46,7 @@ def getParallelMeans(strHist):
       plot = strHist[1]
       cut = strHist[2]
       opt = strHist[3]
+      exp = strHist[9]
       if args.debug:
             print("Draw options: ", plot,cut,opt)
       # draw the histogram
@@ -53,11 +56,61 @@ def getParallelMeans(strHist):
             print('Drawing didnt work...')
             return
       else:
+            entr = hist.GetEntries()
             # if the histogram more entries than the threshold  
-            if ( hist.GetEntries() > threshold ):
+            if ( entr > threshold ):
+                  mean = hist.GetMean()
+                  rms = hist.GetRMS()
+                  meanErr = hist.GetMeanError()
+                  rmsErr = hist.GetRMSError()
+                  chi2 = 0 
+                  converged = False
+
+                  # fit with exponential
+                  if exp:
+                        maximum = hist.GetBinCenter(hist.GetMaximumBin())
+                        fit_range = (maximum, (maximum+3*rms)) 
+                        f1 = r.TF1("f1_"+str(strHist[4]),"[0]*exp(-x/[1])",maximum,(maximum+10*rms))
+                        f1.SetParameters(1,rms)
+                        f1.SetLineColor(colors[strHist[8]])
+                        chi2 = 1000
+                        trialStart = 0
+                        tau = rms
+                        tauErr = rmsErr
+                        trialStart = 0
+                        while trialStart<3:
+                              # make sure that the tail is not the major determinator of the fit
+                              if hist.GetBinContent(hist.GetMaximumBin()+trialStart) < entr/5.:
+                                    #print("Maximum bin has too low stats.. continue")
+                                    trialStart+=1
+                                    continue
+                              peakPos = hist.GetBinCenter(hist.GetMaximumBin()+trialStart)
+                              trialEnd = 0
+                              while trialEnd<5:
+                                    maximumFlux = peakPos + ((2 + trialEnd)*rms) 
+                                    maxEntr = hist.GetBinCenter(hist.FindLastBinAbove(1))
+                                    fresults = hist.Fit(f1, "QNS", "goff", peakPos, maximumFlux)
+                                    if fresults.IsValid() and fresults.Ndf()>0:
+                                          tau = f1.GetParameter(1)
+                                          tauErr = f1.GetParError(1)
+                                          # only converging fits, with tau>0 and tauErr/tau<10% considered
+                                          if (tau>0.) and (tau<maxEntr) and (tauErr!=0) and (tauErr/tau<0.2) and (fresults.Chi2()/fresults.Ndf()<chi2):
+                                                chi2 = fresults.Chi2()/fresults.Ndf()
+                                                fit_range = (peakPos, maximumFlux)
+                                                converged = True
+                                    trialEnd += 1
+                              trialStart += 1
+
+                        # set tau as rms
+                        rms = tau
+                        rmsErr = tauErr
+                        # if fit converged, add function to histogram for draw option
+                        if converged and args.drawHistos:
+                              hist.Fit(f1, "Q", "goff", fit_range[0], fit_range[1])
+
                   # write mean etc. into txt file
                   with open(strHist[6], 'a') as txtFile:
-                        line = strHist[5]+'{} {} {} {} {}\n'.format(hist.GetEntries(), hist.GetMean(), hist.GetMeanError(), hist.GetRMS(), hist.GetRMSError())
+                        line = strHist[5]+'{} {} {} {} {} {} {}\n'.format(hist.GetEntries(), mean, meanErr, rms, rmsErr, chi2, int(converged==True))
                         txtFile.writelines(line)
                   # prepare the histogram for drawing and add to list
                   hist.SetName(strHist[4]) 
@@ -68,7 +121,11 @@ def getParallelMeans(strHist):
 filename = args.inputFile
 # read tree                
 inRoot = r.TFile( filename , 'read' )
-lst = getDays(inRoot.tree)
+lst = []
+if args.day:
+      lst = [int(args.day)]
+else:
+      getDays(inRoot.tree)
 en_bins, energies, en_max = getEnergyBins(hepd, hepp)
 print("To test days: ", lst)
 
@@ -86,8 +143,11 @@ if energies!=test_energies:
 print("For energies: ", energies)
 
 outFilePath = home()+'/data/averages/'+str(args.data)+'/'
+if args.fit:
+      outFilePath += 'fittedExp/'
 if not os.path.exists(outFilePath):
     os.makedirs(outFilePath)
+print(outFilePath)
 
 for d in lst:
       print("Day: ", d)
@@ -98,12 +158,11 @@ for d in lst:
       # stacks and legends to be used for the --drawHistos option
       thstacks = [[r.THStack()] * len(Lbins[0:numLbin]) for x in range(len(energies))]
       tlegends = [[r.TLegend()] * len(Lbins[0:numLbin]) for x in range(len(energies))]
-      tlines = [[[]] * len(Lbins[0:numLbin]) for x in range(len(energies))]
       # write averagesfor all L-p cells / day 
       outFileName = outFilePath+str(d)+'_min_'+str(threshold)+'ev.txt'
       print("Write averages in: ", outFileName)
       outFile = open(outFileName, 'w')
-      outFile.write('energy L pitch entries mean meanErr rms rmsErr \n')
+      outFile.write('energy L pitch entries mean meanErr rms rmsErr chi2 fit\n')
       outFile.close()
       count = 0
       
@@ -111,25 +170,18 @@ for d in lst:
             # get geometrcal factor for meaningful histogram binning 
             if hepd:
                   binWidth = 1./getGeomFactor(ien)
-                  # write in txt file the energy bin center, not the lower edge                                                                                                                                                     
-                  if ien<(len(energies)-1):
-                        energyBinCenter = (en + energies[ien+1])/2.
-                  else:
-                        energyBinCenter = (en_max + en)/2.
             else:
-                  energyBinCenter = en
                   # hepp data experience much higher flux values in lowest energy bin
                   # but this will not be taken into account in the number of bins of the histogram
                   binWidth = 10
             for iL,L in enumerate(Lbins[0:numLbin]):
-                  tlegends[ien][iL] = r.TLegend(0.6,0.5,0.95,.9, 'threshold = '+str(threshold)+' entries')
+                  tlegends[ien][iL] = r.TLegend(0.6,0.5,0.9,.9, 'threshold = '+str(threshold)+' entries')
                   thstacks[ien][iL] = r.THStack('stack_'+str(en)+'_'+str(L), 'stack_'+str(en)+'_'+str(L)) 
 
                   for iP,P in enumerate(Pbins[0:numPbin-1]):
-
-                        writeOut = str('{} {} {} '.format(energyBinCenter, L, P))
+                        writeOut = str('{} {} {} '.format(round(energies[ien],1), L, P))
                         histName = 'hist_day_'+str(d)+'_energy_'+str(en)+'_L_'+str(L)+'_p_'+str(P)
-                        lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'(50,0,'+str(50*binWidth)+')'), 'field>25000 && energy=='+str(en)+' && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP ]
+                        lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'(50,0,'+str(50*binWidth)+')'), 'field>25000 && energy=='+str(en)+' && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit ]
                         commands.append(lst_comm)
                         count += 1
 
@@ -145,6 +197,8 @@ for d in lst:
       print("Got {} histograms.. efficiency with thr={} of {:.2f}".format(len(th1ds), args.threshold, len(th1ds)/count*100))
 
       if args.drawHistos:
+            if args.fit:
+                  r.gStyle.SetOptStat(1111)
             # loop through list of histograms
             for h in th1ds:
                   name = h.GetName()
@@ -154,15 +208,10 @@ for d in lst:
                   # find index of energy and L
                   energyIndex = energies.index(energyValue)
                   lIndex = Lbins.index(lValue)
-                  # add line for 5 sigma cut
-                  fiveSig = h.GetMean() + 5*h.GetRMS()
-                  line = r.TLine(fiveSig,h.GetMinimum(),fiveSig,h.GetMaximum());
-                  line.SetLineColor(colors[Pbins.index(pValue)])
                   # fill hist in corresponding stacks
-                  tlegends[energyIndex][lIndex].AddEntry(h, 'L='+str(lValue)+', p='+str(pValue), 'l')
+                  tlegends[energyIndex][lIndex].AddEntry(h, 'L='+str(lValue)+', #alpha_{eq}='+str(pValue), 'l')
                   thstacks[energyIndex][lIndex].Add(h)
-                  tlines[energyIndex][lIndex].append(line)
-
+                  
             print('legend E entries: ',len(tlegends))
             print('legend L entries: ',len(tlegends[1]))
 
@@ -176,12 +225,11 @@ for d in lst:
                               can = r.TCanvas()
                               can.SetLogy()
                               st.Draw("nostack, histe")
-                              st.GetXaxis().SetTitle('flux [counts/(s#upoint cm^{2}#upoint sr#upoint MeV)]')
+                              st.Draw("nostack, f same")
+                              st.GetXaxis().SetTitle('flux [counts/(s#upoint cm^{2}#upoint sr)]')
                               st.GetYaxis().SetTitle('# entries')
                               st.SetMinimum(1)
                               tlegends[iest][ifinal].Draw()
-                              #for li in tlines[iest][ifinal]:
-                              #      li.Draw()
                               can.Modified()
                               outCurves = filename.replace('root','pdf').replace('all', 'day_'+str(d)+'_energy_'+str(energies[iest])+'_L_'+str(Lbins[ifinal]))
                               can.Print(outCurves)

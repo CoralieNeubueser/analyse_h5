@@ -105,7 +105,8 @@ if not args.merge and not args.ana:
                 frun.write('source %s\n' % (path_to_INIT))
                 frun.write('cd %s\n'%(home()))
                 frun.write(cmd+'\n')
-            
+                frun.write('chmod -R g+rwx %s'%(outfile))
+
                 os.system("mkdir -p %s/out"%logdir)
                 os.system("mkdir -p %s/log"%logdir)
                 os.system("mkdir -p %s/err"%logdir)

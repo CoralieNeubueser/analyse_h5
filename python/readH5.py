@@ -59,7 +59,6 @@ dset_field = f[parameters[args.data][6]][()]
 maxEv = len(dset2)
 if args.debug:
     print("Events: ", maxEv)
-
 time_blanc = dset_time[0]
 time_blanc_min = dset_time[maxEv-1]
 
@@ -322,9 +321,6 @@ for iev,ev in enumerate(dset2):
     N[0] = countFlux
 
     tree.Fill()
-
-    print(F_vecvec)
-    print(F_vec_en)
 
     # clean-up
     E_vec.clear()

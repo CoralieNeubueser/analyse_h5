@@ -267,30 +267,54 @@ def getCommandOutput(command):
     return {"stdout":stdout, "stderr":stderr, "returncode":p.returncode}
 
 #__________________________________________________________
-def SubmitToCondor(cmd,nbtrials):
-    submissionStatus=0
-    cmd=cmd.replace('//','/')
-    for i in range(nbtrials):
-        outputCMD = getCommandOutput(cmd)
-        print("stderr: ", outputCMD["stderr"])
-        stderr=outputCMD["stderr"].split("\n")
-        stdout=outputCMD["stdout"].split("\n")
+def SubmitToCondor(cmd,run,irun):
+    runpath, runname = os.path.split(run)
+    logdir = home() + '/log'
+    frunname = 'job_%s.sh'%(str(runname.replace('.h5','')))
+    print(frunname)
+    frun = None
+    try:
+        frun = open(logdir+'/'+frunname, 'w')
+    except IOError as e:
+        print("I/O error({0}): {1}".format(e.errno, e.strerror))
+        time.sleep(10)
+        frun = open(logdir+'/'+frunname, 'w')
+        print(frun)
 
-        if len(stderr)==1 and stderr[0]=='' :
-            print("------------GOOD SUB")
-            submissionStatus=1
-        else:
-            print("++++++++++++ERROR submitting, will retry")
-            print("Trial : "+str(i)+" / "+str(nbtrials))
-            print("stderr : ",stderr)
-            print("stderr : ",len(stderr))
-
-            time.sleep(10)
-
-        if submissionStatus==1:
-            return 1,0
-
-        if i==nbtrials-1:
-            print("failed sumbmitting after: "+str(nbtrials)+" trials, will exit")
-            return 0,0
-
+    os.system('chmod 777 %s/%s'%(logdir,frunname))
+    frun.write('#!/bin/bash\n')
+    frun.write('unset LD_LIBRARY_PATH\n')
+    frun.write('unset PYTHONHOME\n')
+    frun.write('unset PYTHONPATH\n')
+    frun.write('export JOBDIR=$PWD\n')
+    frun.write('source %s\n' % (path_to_INIT))
+    frun.write('cd %s\n'%(home()))
+    frun.write(cmd+'\n')
+    
+    os.system("mkdir -p %s/out"%logdir)
+    os.system("mkdir -p %s/log"%logdir)
+    os.system("mkdir -p %s/err"%logdir)
+    
+    # create also .sub file here                                                                                                                                                                                   
+    fsubname = frunname.replace('.sh','.sub')
+    fsub = None
+    try:
+        fsub = open(logdir+'/'+fsubname, 'w')
+    except IOError as e:
+        print("I/O error({0}): {1}".format(e.errno, e.strerror))
+        time.sleep(10)
+        fsub = open(logdir+'/'+fsubname, 'w')
+    
+    fsub.write('executable            = %s/%s\n' %(logdir,frunname))
+    fsub.write('arguments             = $(ClusterID) $(ProcId)\n')
+    fsub.write('output                = %s/out/job.%s.$(ClusterId).$(ProcId).out\n'%(logdir,str(irun)))
+    fsub.write('log                   = %s/log/job.%s.$(ClusterId).log\n'%(logdir,str(irun)))
+    fsub.write('error                 = %s/err/job.%s.$(ClusterId).$(ProcId).err\n'%(logdir,str(irun)))
+    fsub.write('RequestCpus = 4\n')
+    fsub.write('+JobFlavour = "espresso"\n')
+    fsub.write('queue 1\n')
+    fsub.close()
+    
+    cmdBatch="condor_submit -name sn-01.cr.cnaf.infn.it %s/%s \n"%(logdir,fsubname)
+    print(cmdBatch)
+    p = subprocess.Popen(cmdBatch, shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE)

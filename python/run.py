@@ -6,6 +6,8 @@ parser.add_argument('--numRuns', type=int, help='Define number of runs to be ana
 parser.add_argument('--hepd', action='store_true', help='Analyse HEPD data.')
 parser.add_argument('--hepp', action='store_true', help='Analyse HEPP data.')
 parser.add_argument('--merge', action='store_true', help='Merge all runs.')
+parser.add_argument('--day', type=int, required=False, help='Merge orbits of a specific day [yyyymmdd].')
+parser.add_argument('--month', type=int, required=False, help='Merge orbits of a specific month [yyyymm].')
 parser.add_argument('--allHists', action='store_true', help='Merge all runs, including the histograms.')
 parser.add_argument('--ana', action='store_true', help='Analyse all runs.')
 parser.add_argument('--test', action='store_true', help='Analyse test runs.')
@@ -83,60 +85,7 @@ if not args.merge and not args.ana:
             print(cmd)
 
             if args.submit:
-                runpath, runname = os.path.split(run)
-                logdir = home() + '/log'
-                frunname = 'job_%s.sh'%(str(runname.replace('.h5','')))
-                print(frunname)
-                frun = None
-                try:
-                    frun = open(logdir+'/'+frunname, 'w')
-                except IOError as e:
-                    print("I/O error({0}): {1}".format(e.errno, e.strerror))
-                    time.sleep(10)
-                    frun = open(logdir+'/'+frunname, 'w')
-                print(frun)
-
-                os.system('chmod 777 %s/%s'%(logdir,frunname))
-                frun.write('#!/bin/bash\n')
-                frun.write('unset LD_LIBRARY_PATH\n')
-                frun.write('unset PYTHONHOME\n')
-                frun.write('unset PYTHONPATH\n')
-                frun.write('export JOBDIR=$PWD\n')
-                frun.write('source %s\n' % (path_to_INIT))
-                frun.write('cd %s\n'%(home()))
-                frun.write(cmd+'\n')
-                frun.write('chmod -R g+rwx %s'%(outfile))
-
-                os.system("mkdir -p %s/out"%logdir)
-                os.system("mkdir -p %s/log"%logdir)
-                os.system("mkdir -p %s/err"%logdir)
-
-                # create also .sub file here 
-                fsubname = frunname.replace('.sh','.sub')
-                fsub = None
-                try:
-                    fsub = open(logdir+'/'+fsubname, 'w')
-                except IOError as e:
-                    print("I/O error({0}): {1}".format(e.errno, e.strerror))
-                    time.sleep(10)
-                    fsub = open(logdir+'/'+fsubname, 'w')
-
-                fsub.write('executable            = %s/%s\n' %(logdir,frunname))
-                fsub.write('arguments             = $(ClusterID) $(ProcId)\n')
-                fsub.write('output                = %s/out/job.%s.$(ClusterId).$(ProcId).out\n'%(logdir,str(irun)))
-                fsub.write('log                   = %s/log/job.%s.$(ClusterId).log\n'%(logdir,str(irun)))
-                fsub.write('error                 = %s/err/job.%s.$(ClusterId).$(ProcId).err\n'%(logdir,str(irun)))
-                fsub.write('RequestCpus = 4\n')        
-                fsub.write('+JobFlavour = "espresso"\n')
-                #fsub.write('+AccountingGroup = "group_u_FCC.local_gen"\n')
-                fsub.write('queue 1\n')
-                fsub.close()
-
-                cmdBatch="condor_submit -name sn-01.cr.cnaf.infn.it %s/%s \n"%(logdir,fsubname)
-
-                print(cmdBatch)
-                p = subprocess.Popen(cmdBatch, shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-
+                SubmitToCondor(cmd, run, irun)
             else:
                 os.system(cmd)
 
@@ -169,24 +118,49 @@ elif args.merge and not args.test:
 
     if args.hepd:
         # write 
-        mge = 'data/root/all_hepd_'+str(runs)+'runs.root'
-        runList = glob.glob('data/root/CSES_HEP_DDD_*.root')
-
+        mge = sharedOutPath()+'data/root/hepd/all_hepd.root'
+        findOld = None
+        runList = []
+        if args.day:
+            runList = glob.glob(sharedOutPath()+'data/root/CSES_HEP_DDD_*'+str(args.day)+'*.root')
+            mge = sharedOutPath()+'data/root/hepd/all_hepd_'+str(args.day)+'_'+str(len(runList))+'_runs.root'
+            findOld = glob.glob(sharedOutPath()+'data/root/hepd/all_hepd_'+str(args.day)+'*.root')
+            runs = len(runList)
+        elif args.month:
+            runList = glob.glob(sharedOutPath()+'data/root/CSES_HEP_DDD_*'+str(args.month)+'*.root')
+            mge = sharedOutPath()+'data/root/hepd/all_hepd_'+str(args.month)+'_'+str(len(runList))+'_runs.root'
+            findOld = glob.glob(sharedOutPath()+'data/root/hepd/all_hepd_'+str(args.month)+'*')
+            runs = len(runList)
+        else:
+            runList = glob.glob(sharedOutPath()+'data/root/CSES_HEP_DDD_*.root')
+            runs = len(runList)
     elif args.hepp: 
-        mge = 'data/root/all_hepp_'+str(runs)+'runs.root'
-        runList = glob.glob('data/root/CSES_01_HEP_1_*.root')
+        mge = sharedOutPath()+'data/root/hepp/all_hepp.root'
+        runList = glob.glob(sharedOutPath()+'data/root/CSES_01_HEP_1_*.root')
+    
+    oldruns=0
+    print(findOld)
+    if len(findOld)==1:
+        head, tail = os.path.split(findOld[0])
+        oldruns=list(map(int, re.findall(r'\d+', tail)))[1]
+    elif len(findOld)>1:
+        for old in findOld:
+            os.system('rm {}'.format(old))
 
-    if len(runList) < runs:
-        print("Only {} files available for merge. ".format(len(runList)))
-        runs = len(runList)
+    # merge files only if not already exists and existing file has less inputs  
+    if runs>0 and oldruns<runs:
+        print("Merge files in: ", mge)
+        merge(mge, runList, runs, args.allHists)
+
         if args.hepd:
-            mge = 'data/root/all_hepd_'+str(runs)+'runs.root'
-        elif args.hepp:
-            mge = 'data/root/all_hepp_'+str(runs)+'runs.root'
-
-    print("Merge files in: ", mge)
-    merge(mge, runList, runs, args.allHists)
-
+            cmd = 'python3 python/writeDayAverages.py --inputFile '+mge+' --data hepd --fit '
+            if args.day:
+                cmd += '--day '+str(args.day)
+            if args.submit:
+                SubmitToCondor(cmd, mge, 1)
+            else:
+                os.system(cmd)
+    
 elif args.merge and args.test:
 
     tests=['L3h5_orig', 'L3h5_rate', 'L3h5_05_95', 'L3h5_rate_05_95']

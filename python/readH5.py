@@ -86,13 +86,13 @@ outRootDir = os.path.split(filename)[0]
 print(outRootDir)
 
 if 'L3_test' in outRootDir:
-    useDir = sharedOutPath()+"/data/root/L3_test/"+os.path.split(outRootDir)[1]+'/'
+    useDir = sharedOutPath()+"/data/root/v2/L3_test/"+os.path.split(outRootDir)[1]+'/'
     pathlib.Path(useDir).mkdir(parents=True, exist_ok=True) 
     outRootName = useDir+os.path.split(filename)[1].replace("h5","root")
     
 else:
     outRootName = os.path.split(filename)[1].replace("h5","root")
-    outRootName = sharedOutPath()+"/data/root/"+outRootName
+    outRootName = sharedOutPath()+"/data/root/v2/"+outRootName
 
 print("Writing output into root file: ", outRootName)
 outRoot = r.TFile( outRootName , 'recreate' )
@@ -242,71 +242,73 @@ for iev,ev in enumerate(dset2):
     for ie,en in enumerate(ev):
         # loop through pitch
         for ip,flux in enumerate(en):
+
             # fill tree only for non-zero fluxes
-            if float(flux)!=0:
-                countFlux+=1
-                # correct flux by new geometrical factors
-                flux = flux*getGeomCorr(hepd, ie)
+            # fill also 0s, decided 2020/10/26
+            # if float(flux)!=0:
+            countFlux+=1
+            # correct flux by new geometrical factors
+            flux = flux*getGeomCorr(hepd, ie)
 
-                # fill pitch/energy/flux vectors
-                #print(F_vec_pt[ip])
-                F_vec_pt[ip] += flux
-                #print("{}\n".format(F_vec_pt[ip]))
-                F_vecvec.push_back(flux)
+            # fill pitch/energy/flux vectors
+            #print(F_vec_pt[ip])
+            F_vec_pt[ip] += flux
+            #print("{}\n".format(F_vec_pt[ip]))
+            F_vecvec.push_back(flux)
+            
+            # HEPP data has stores counts per 9 different devices (merge all)  
+            if not hepd:
+                countInt = dset_count[iev][ip]
+                # rebin the energy range from 256 to 16
+                maxE = dset_en[0][255]
+                minE = dset_en[0][0]
+                binE = (maxE-minE)/16.
+                newbin = math.floor(ie/16.)
+                E_vec.push_back(float(round(energies[newbin],5)))
+                F_vec_en[newbin] += flux
+                Pvalue = dset_p[0][ip]
+                P_vec.push_back(int(Pvalue))
+                ie = newbin
+
+            else:
+                Pvalue = (dset_p[0][ip]+dset_p[0][ip-1])/2.
+                if ip==0:
+                    Pvalue = dset_p[0][ip]/2.
+                P_vec.push_back(int(Pvalue))
+                E_vec.push_back(float(energies[ie]))
+                F_vec_en[ie] += float(flux)
                 
-                # HEPP data has stores counts per 9 different devices (merge all)  
-                if not hepd:
-                    countInt = dset_count[iev][ip]
-                    # rebin the energy range from 256 to 16
-                    maxE = dset_en[0][255]
-                    minE = dset_en[0][0]
-                    binE = (maxE-minE)/16.
-                    newbin = math.floor(ie/16.)
-                    E_vec.push_back(float(round(energies[newbin],5)))
-                    F_vec_en[newbin] += flux
-                    Pvalue = dset_p[0][ip]
-                    P_vec.push_back(int(Pvalue))
-                    ie = newbin
+            # calculate equatorial pitch angle
+            alpha_eq = getAlpha_eq( Pvalue, Bfield, Beq )
+            A_vec.push_back( alpha_eq )
 
-                else:
-                    Pvalue = (dset_p[0][ip]+dset_p[0][ip-1])/2.
-                    if ip==0:
-                        Pvalue = dset_p[0][ip]/2.
-                    P_vec.push_back(int(Pvalue))
-                    E_vec.push_back(float(energies[ie]))
-                    F_vec_en[ie] += float(flux)
-                
-                # calculate equatorial pitch angle
-                alpha_eq = getAlpha_eq( Pvalue, Bfield, Beq )
-                A_vec.push_back( alpha_eq )
+            if iev==1 and args.debug:
+                print("--- Energy bin:      ", ie)
+                print("--- Energy:          ", energies[ie])
+                print("--- Pitch bin:       ", ip)
+                print("--- Pitch:           ", Pvalue)
+                print("--- Pitch_eq:        ", alpha_eq)
+                print("--- Flux:            ", flux)
+                print("--- Day time [h]:    ", time_calc/60/60 )
 
-                if iev==1 and args.debug:
-                    print("--- Energy bin:      ", ie)
-                    print("--- Energy:          ", energies[ie])
-                    print("--- Pitch bin:       ", ip)
-                    print("--- Pitch:           ", Pvalue)
-                    print("--- Pitch_eq:        ", alpha_eq)
-                    print("--- Flux:            ", flux)
-                    print("--- Day time [h]:    ", time_calc/60/60 )
-
-                # fill flux branches of L-pitch
-                icell = 0
-                found = False
-                for cell_l in range(0,len(l_x_bins)-1):
-                    for cell_p in range(0,len(p_x_bins)-1):
-                        if l_x_bins[cell_l] < Lshell and l_x_bins[cell_l+1] > dset1[iev]:
-                            if p_x_bins[cell_p] < alpha_eq and p_x_bins[cell_p+1] > alpha_eq:
-                                found = True
-                                vecCells[icell].push_back(flux)
-                                break
-                        icell+=1
-                    if found==True:
-                        break
+            # fill flux branches of L-pitch
+            icell = 0
+            found = False
+            for cell_l in range(0,len(l_x_bins)-1):
+                for cell_p in range(0,len(p_x_bins)-1):
+                    if l_x_bins[cell_l] < Lshell and l_x_bins[cell_l+1] > dset1[iev]:
+                        if p_x_bins[cell_p] < alpha_eq and p_x_bins[cell_p+1] > alpha_eq:
+                            found = True
+                            vecCells[icell].push_back(flux)
+                            break
+                    icell+=1
+                if found==True:
+                    break
                     
-                # fill histograms
-                hist2D_l_pitch.Fill(Lshell, alpha_eq, flux)
-                hist2D_l_pitch_en.Fill(Lshell, alpha_eq)
-                hist2D_loc_flux.Fill(lonInt, latInt, flux)
+            # fill histograms
+            hist2D_l_pitch.Fill(Lshell, alpha_eq, flux)
+            hist2D_l_pitch_en.Fill(Lshell, alpha_eq)
+            hist2D_loc_flux.Fill(lonInt, latInt, flux)
 
     # fill tree with measures / 1s
     Ev[0] = iev

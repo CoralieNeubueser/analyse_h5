@@ -47,6 +47,7 @@ def getParallelMeans(strHist):
       cut = strHist[2]
       opt = strHist[3]
       exp = strHist[9]
+      geo = strHist[10] 
       if args.debug:
             print("Draw options: ", plot,cut,opt)
       # draw the histogram
@@ -102,15 +103,19 @@ def getParallelMeans(strHist):
                               trialStart += 1
 
                         # set tau as rms
-                        rms = tau
-                        rmsErr = tauErr
-                        # if fit converged, add function to histogram for draw option
-                        if converged and args.drawHistos:
-                              hist.Fit(f1, "Q", "goff", fit_range[0], fit_range[1])
+                        if converged:
+                              rms = tau
+                              rmsErr = tauErr
+                              # if fit converged, add function to histogram for draw option
+                              if args.drawHistos:
+                                    hist.Fit(f1, "Q", "goff", fit_range[0], fit_range[1])
+                        else:
+                              rms = hist.GetRMS()
+                              rmsErr = hist.GetRMSError()
 
                   # write mean etc. into txt file
                   with open(strHist[6], 'a') as txtFile:
-                        line = strHist[5]+'{} {} {} {} {} {} {}\n'.format(hist.GetEntries(), mean, meanErr, rms, rmsErr, chi2, int(converged==True))
+                        line = strHist[5]+'{} {:.5f} {:.6f} {:.5f} {:.6f} {:.1f} {} {:.3f}\n'.format(hist.GetEntries(), mean, meanErr, rms, rmsErr, chi2, int(converged==True), geo)
                         txtFile.writelines(line)
                   # prepare the histogram for drawing and add to list
                   hist.SetName(strHist[4]) 
@@ -149,6 +154,9 @@ if not os.path.exists(outFilePath):
     os.makedirs(outFilePath)
 print(outFilePath)
 
+# read Data file with geom Indices
+data = readGeomIndex()
+
 for d in lst:
       print("Day: ", d)
       # list of commands to be run in parallel
@@ -158,11 +166,13 @@ for d in lst:
       # stacks and legends to be used for the --drawHistos option
       thstacks = [[r.THStack()] * len(Lbins[0:numLbin]) for x in range(len(energies))]
       tlegends = [[r.TLegend()] * len(Lbins[0:numLbin]) for x in range(len(energies))]
-      # write averagesfor all L-p cells / day 
+      # write averages for all L-p cells / day 
       outFileName = outFilePath+str(d)+'_min_'+str(threshold)+'ev.txt'
+      # get average geomagnetic index of this day
+      meanGeomIndex = getGeomIndex(data,d)
       print("Write averages in: ", outFileName)
       outFile = open(outFileName, 'w')
-      outFile.write('energy L pitch entries mean meanErr rms rmsErr chi2 fit\n')
+      outFile.write('energy L pitch entries mean meanErr rms rmsErr chi2 fit avGeomIndex\n')
       outFile.close()
       count = 0
       
@@ -181,7 +191,7 @@ for d in lst:
                   for iP,P in enumerate(Pbins[0:numPbin-1]):
                         writeOut = str('{} {} {} '.format(round(energies[ien],1), L, P))
                         histName = 'hist_day_'+str(d)+'_energy_'+str(en)+'_L_'+str(L)+'_p_'+str(P)
-                        lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'(50,0,'+str(50*binWidth)+')'), 'field>25000 && energy=='+str(en)+' && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit ]
+                        lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'(50,0,'+str(50*binWidth)+')'), 'field>25000 && energy=='+str(en)+' && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit, meanGeomIndex ]
                         commands.append(lst_comm)
                         count += 1
 

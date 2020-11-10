@@ -20,7 +20,7 @@ parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 parser.add_argument('--threshold', type=int, default=100, help='Pick a number as minimum statistic in histograms.')
 parser.add_argument('--drawHistos', action='store_true', help='Tell if histograms should be drawn.')
 parser.add_argument('--fit', action='store_true', help='Use an exponential function to fit the distributions.')
-parser.add_argument('--day', type=int, help='Specify a day.')
+parser.add_argument('--day', type=int, default=None, help='Specify a day.')
 args,_=parser.parse_known_args()
 
 # retrieve binning on L/pitch
@@ -69,10 +69,15 @@ def getParallelMeans(strHist):
 
                   # fit with exponential
                   if exp:
-                        maximum = hist.GetBinCenter(hist.GetMaximumBin())
-                        fit_range = (maximum, (maximum+3*rms)) 
-                        f1 = r.TF1("f1_"+str(strHist[4]),"[0]*exp(-x/[1])",maximum,(maximum+10*rms))
-                        f1.SetParameters(1,rms)
+                        clone = hist.Clone("clone")
+                        maximumBin = hist.GetMaximumBin()
+                        maximum = hist.GetBinCenter(maximumBin)
+                        # use a larger RMS, that is not effected by the large number of 0s, in order to increase the fit range
+                        clone.GetXaxis().SetRange((maximumBin+1), clone.GetNbinsX())
+                        rms_without_zeros = clone.GetRMS()
+                        fit_range = (maximum, (maximum+3*rms_without_zeros)) 
+                        f1 = r.TF1("f1_"+str(strHist[4]),"[0]*exp(-x/[1])",maximum,(maximum+10*rms_without_zeros))
+                        f1.SetParameters(1,rms_without_zeros)
                         f1.SetLineColor(colors[strHist[8]])
                         chi2 = 1000
                         trialStart = 0
@@ -80,22 +85,28 @@ def getParallelMeans(strHist):
                         tauErr = rmsErr
                         trialStart = 0
                         while trialStart<3:
+                              if trialStart>0:
+                                    # Set new range on the histgram to extract 2nd/3rd maximum
+                                    clone.GetXaxis().SetRange((maximumBin+1), clone.GetNbinsX())
+                                    maximumBin = clone.GetMaximumBin()
+                              peakCont = clone.GetBinContent( maximumBin )
                               # make sure that the tail is not the major determinator of the fit
-                              if hist.GetBinContent(hist.GetMaximumBin()+trialStart) < entr/5.:
-                                    #print("Maximum bin has too low stats.. continue")
+                              if peakCont < entr/1000.:
+                                    # print("Maximum bin has too low stats.. continue")
                                     trialStart+=1
                                     continue
-                              peakPos = hist.GetBinCenter(hist.GetMaximumBin()+trialStart)
+
+                              # set range 
+                              peakPos = hist.GetBinCenter(maximumBin)
                               trialEnd = 0
                               while trialEnd<5:
-                                    maximumFlux = peakPos + ((2 + trialEnd)*rms) 
-                                    maxEntr = hist.GetBinCenter(hist.FindLastBinAbove(1))
+                                    maximumFlux = peakPos + ((2 + trialEnd)*rms_without_zeros) 
                                     fresults = hist.Fit(f1, "QNS", "goff", peakPos, maximumFlux)
                                     if fresults.IsValid() and fresults.Ndf()>0:
                                           tau = f1.GetParameter(1)
                                           tauErr = f1.GetParError(1)
                                           # only converging fits, with tau>0 and tauErr/tau<10% considered
-                                          if (tau>0.) and (tau<maxEntr) and (tauErr!=0) and (tauErr/tau<0.2) and (fresults.Chi2()/fresults.Ndf()<chi2):
+                                          if (tau>0.) and (tau<3*rms_without_zeros) and (tauErr!=0) and (tauErr/tau<0.2) and (fresults.Chi2()/fresults.Ndf()<chi2):
                                                 chi2 = fresults.Chi2()/fresults.Ndf()
                                                 fit_range = (peakPos, maximumFlux)
                                                 converged = True
@@ -130,7 +141,7 @@ lst = []
 if args.day:
       lst = [int(args.day)]
 else:
-      getDays(inRoot.tree)
+      lst = getDays(inRoot.tree)
 en_bins, energies, en_max = getEnergyBins(hepd, hepp)
 print("To test days: ", lst)
 
@@ -147,12 +158,12 @@ if energies!=test_energies:
 
 print("For energies: ", energies)
 
-outFilePath = home()+'/data/averages/'+str(args.data)+'/'
+outFilePath = sharedOutPath()+'/data/averages/v2/'+str(args.data)+'/'
 if args.fit:
       outFilePath += 'fittedExp/'
 if not os.path.exists(outFilePath):
     os.makedirs(outFilePath)
-print(outFilePath)
+print('Files will be stored in: ', outFilePath)
 
 # read Data file with geom Indices
 data = readGeomIndex()
@@ -241,5 +252,11 @@ for d in lst:
                               st.SetMinimum(1)
                               tlegends[iest][ifinal].Draw()
                               can.Modified()
-                              outCurves = filename.replace('root','pdf').replace('all', 'day_'+str(d)+'_energy_'+str(energies[iest])+'_L_'+str(Lbins[ifinal]))
+                              head, tail = os.path.split( filename.replace('root','pdf').replace('all', 'day_'+str(d)+'_energy_'+str(energies[iest])+'_L_'+str(Lbins[ifinal])) )
+                              if args.threshold!=100:
+                                    head = head+'/'+str(args.threshold)+'ev/'
+                              if not os.path.exists(head):
+                                    os.makedirs(head)
+
+                              outCurves = head+'/'+tail
                               can.Print(outCurves)

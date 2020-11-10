@@ -325,7 +325,7 @@ def SubmitToCondor(cmd,run,irun):
 ## read in geomagnetic indices
 def readGeomIndex():
 
-    dataPath = sharedOutPath()+"/geomIndices/BDR_SymH_AE_Indices_merged2018and2019_FlagV4b_All.txt"
+    dataPath = sharedOutPath()+"/data/geomIndices/BDR_SymH_AE_Indices_merged2018and2019_FlagV4b_All.txt"
     file = open(dataPath, "r")
     next(file)
     return file.readlines()[20:]
@@ -334,10 +334,8 @@ def getGeomIndex(lines, day):
     
     allGeomIndices = []
     for line in lines:
-        columns = [i for i in line.split()]
-        # print(columns)                                                                                                                                                                                                   
+        columns = [i for i in line.split()]      
         data_day = int(columns[1].replace('-',''))
         if data_day == day:
             allGeomIndices.append(int(columns[5]))
-    print(allGeomIndices)
     return np.mean(np.array(allGeomIndices))

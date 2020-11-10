@@ -20,7 +20,7 @@ parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 parser.add_argument('--threshold', type=int, default=100, help='Pick a number as minimum statistic in histograms.')
 parser.add_argument('--drawHistos', action='store_true', help='Tell if histograms should be drawn.')
 parser.add_argument('--fit', action='store_true', help='Use an exponential function to fit the distributions.')
-parser.add_argument('--day', type=int, help='Specify a day.')
+parser.add_argument('--day', type=int, default=None, help='Specify a day.')
 args,_=parser.parse_known_args()
 
 # retrieve binning on L/pitch
@@ -47,6 +47,7 @@ def getParallelMeans(strHist):
       cut = strHist[2]
       opt = strHist[3]
       exp = strHist[9]
+      geo = strHist[10] 
       if args.debug:
             print("Draw options: ", plot,cut,opt)
       # draw the histogram
@@ -68,10 +69,15 @@ def getParallelMeans(strHist):
 
                   # fit with exponential
                   if exp:
-                        maximum = hist.GetBinCenter(hist.GetMaximumBin())
-                        fit_range = (maximum, (maximum+3*rms)) 
-                        f1 = r.TF1("f1_"+str(strHist[4]),"[0]*exp(-x/[1])",maximum,(maximum+10*rms))
-                        f1.SetParameters(1,rms)
+                        clone = hist.Clone("clone")
+                        maximumBin = hist.GetMaximumBin()
+                        maximum = hist.GetBinCenter(maximumBin)
+                        # use a larger RMS, that is not effected by the large number of 0s, in order to increase the fit range
+                        clone.GetXaxis().SetRange((maximumBin+1), clone.GetNbinsX())
+                        rms_without_zeros = clone.GetRMS()
+                        fit_range = (maximum, (maximum+3*rms_without_zeros)) 
+                        f1 = r.TF1("f1_"+str(strHist[4]),"[0]*exp(-x/[1])",maximum,(maximum+10*rms_without_zeros))
+                        f1.SetParameters(1,rms_without_zeros)
                         f1.SetLineColor(colors[strHist[8]])
                         chi2 = 1000
                         trialStart = 0
@@ -79,22 +85,28 @@ def getParallelMeans(strHist):
                         tauErr = rmsErr
                         trialStart = 0
                         while trialStart<3:
+                              if trialStart>0:
+                                    # Set new range on the histgram to extract 2nd/3rd maximum
+                                    clone.GetXaxis().SetRange((maximumBin+1), clone.GetNbinsX())
+                                    maximumBin = clone.GetMaximumBin()
+                              peakCont = clone.GetBinContent( maximumBin )
                               # make sure that the tail is not the major determinator of the fit
-                              if hist.GetBinContent(hist.GetMaximumBin()+trialStart) < entr/5.:
-                                    #print("Maximum bin has too low stats.. continue")
+                              if peakCont < entr/1000.:
+                                    # print("Maximum bin has too low stats.. continue")
                                     trialStart+=1
                                     continue
-                              peakPos = hist.GetBinCenter(hist.GetMaximumBin()+trialStart)
+
+                              # set range 
+                              peakPos = hist.GetBinCenter(maximumBin)
                               trialEnd = 0
                               while trialEnd<5:
-                                    maximumFlux = peakPos + ((2 + trialEnd)*rms) 
-                                    maxEntr = hist.GetBinCenter(hist.FindLastBinAbove(1))
+                                    maximumFlux = peakPos + ((2 + trialEnd)*rms_without_zeros) 
                                     fresults = hist.Fit(f1, "QNS", "goff", peakPos, maximumFlux)
                                     if fresults.IsValid() and fresults.Ndf()>0:
                                           tau = f1.GetParameter(1)
                                           tauErr = f1.GetParError(1)
                                           # only converging fits, with tau>0 and tauErr/tau<10% considered
-                                          if (tau>0.) and (tau<maxEntr) and (tauErr!=0) and (tauErr/tau<0.2) and (fresults.Chi2()/fresults.Ndf()<chi2):
+                                          if (tau>0.) and (tau<3*rms_without_zeros) and (tauErr!=0) and (tauErr/tau<0.2) and (fresults.Chi2()/fresults.Ndf()<chi2):
                                                 chi2 = fresults.Chi2()/fresults.Ndf()
                                                 fit_range = (peakPos, maximumFlux)
                                                 converged = True
@@ -102,15 +114,19 @@ def getParallelMeans(strHist):
                               trialStart += 1
 
                         # set tau as rms
-                        rms = tau
-                        rmsErr = tauErr
-                        # if fit converged, add function to histogram for draw option
-                        if converged and args.drawHistos:
-                              hist.Fit(f1, "Q", "goff", fit_range[0], fit_range[1])
+                        if converged:
+                              rms = tau
+                              rmsErr = tauErr
+                              # if fit converged, add function to histogram for draw option
+                              if args.drawHistos:
+                                    hist.Fit(f1, "Q", "goff", fit_range[0], fit_range[1])
+                        else:
+                              rms = hist.GetRMS()
+                              rmsErr = hist.GetRMSError()
 
                   # write mean etc. into txt file
                   with open(strHist[6], 'a') as txtFile:
-                        line = strHist[5]+'{} {} {} {} {} {} {}\n'.format(hist.GetEntries(), mean, meanErr, rms, rmsErr, chi2, int(converged==True))
+                        line = strHist[5]+'{} {:.5f} {:.6f} {:.5f} {:.6f} {:.1f} {} {:.3f}\n'.format(hist.GetEntries(), mean, meanErr, rms, rmsErr, chi2, int(converged==True), geo)
                         txtFile.writelines(line)
                   # prepare the histogram for drawing and add to list
                   hist.SetName(strHist[4]) 
@@ -125,7 +141,7 @@ lst = []
 if args.day:
       lst = [int(args.day)]
 else:
-      getDays(inRoot.tree)
+      lst = getDays(inRoot.tree)
 en_bins, energies, en_max = getEnergyBins(hepd, hepp)
 print("To test days: ", lst)
 
@@ -142,12 +158,15 @@ if energies!=test_energies:
 
 print("For energies: ", energies)
 
-outFilePath = home()+'/data/averages/'+str(args.data)+'/'
+outFilePath = sharedOutPath()+'/data/averages/v2/'+str(args.data)+'/'
 if args.fit:
       outFilePath += 'fittedExp/'
 if not os.path.exists(outFilePath):
     os.makedirs(outFilePath)
-print(outFilePath)
+print('Files will be stored in: ', outFilePath)
+
+# read Data file with geom Indices
+data = readGeomIndex()
 
 for d in lst:
       print("Day: ", d)
@@ -158,11 +177,13 @@ for d in lst:
       # stacks and legends to be used for the --drawHistos option
       thstacks = [[r.THStack()] * len(Lbins[0:numLbin]) for x in range(len(energies))]
       tlegends = [[r.TLegend()] * len(Lbins[0:numLbin]) for x in range(len(energies))]
-      # write averagesfor all L-p cells / day 
+      # write averages for all L-p cells / day 
       outFileName = outFilePath+str(d)+'_min_'+str(threshold)+'ev.txt'
+      # get average geomagnetic index of this day
+      meanGeomIndex = getGeomIndex(data,d)
       print("Write averages in: ", outFileName)
       outFile = open(outFileName, 'w')
-      outFile.write('energy L pitch entries mean meanErr rms rmsErr chi2 fit\n')
+      outFile.write('energy L pitch entries mean meanErr rms rmsErr chi2 fit avGeomIndex\n')
       outFile.close()
       count = 0
       
@@ -181,7 +202,7 @@ for d in lst:
                   for iP,P in enumerate(Pbins[0:numPbin-1]):
                         writeOut = str('{} {} {} '.format(round(energies[ien],1), L, P))
                         histName = 'hist_day_'+str(d)+'_energy_'+str(en)+'_L_'+str(L)+'_p_'+str(P)
-                        lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'(50,0,'+str(50*binWidth)+')'), 'field>25000 && energy=='+str(en)+' && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit ]
+                        lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'(50,0,'+str(50*binWidth)+')'), 'field>25000 && energy=='+str(en)+' && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit, meanGeomIndex ]
                         commands.append(lst_comm)
                         count += 1
 
@@ -231,5 +252,11 @@ for d in lst:
                               st.SetMinimum(1)
                               tlegends[iest][ifinal].Draw()
                               can.Modified()
-                              outCurves = filename.replace('root','pdf').replace('all', 'day_'+str(d)+'_energy_'+str(energies[iest])+'_L_'+str(Lbins[ifinal]))
+                              head, tail = os.path.split( filename.replace('root','pdf').replace('all', 'day_'+str(d)+'_energy_'+str(energies[iest])+'_L_'+str(Lbins[ifinal])) )
+                              if args.threshold!=100:
+                                    head = head+'/'+str(args.threshold)+'ev/'
+                              if not os.path.exists(head):
+                                    os.makedirs(head)
+
+                              outCurves = head+'/'+tail
                               can.Print(outCurves)

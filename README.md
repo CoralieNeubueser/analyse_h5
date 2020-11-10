@@ -68,7 +68,7 @@ The flux averages will be stored in ```{working_directory}/data/averages/hepd/{y
 # Create root file of potential particle bursts
 a new root file with fluxes larger than the mean+(3x rms) can be created in the next step, with:
 ~~~
-python3 python/ --data hepd --inputFile data/root/L3_test/L3h5_orig/all.root
+python3 python/findHighFluxes.py --data hepd --inputFile data/root/L3_test/L3h5_orig/all.root
 ~~~
 The input file can be varied, and the type of data (either HEPD of HEPP-L) needs to be specified.
 You will find the output in the directory of the ```inputFile``` as ```all_highFluxes.root```

@@ -21,6 +21,7 @@ parser.add_argument('--threshold', type=int, default=100, help='Pick a number as
 parser.add_argument('--drawHistos', action='store_true', help='Tell if histograms should be drawn.')
 parser.add_argument('--fit', action='store_true', help='Use an exponential function to fit the distributions.')
 parser.add_argument('--day', type=int, default=None, help='Specify a day.')
+parser.add_argument('--useVersion', type=str, default='v2', help='Specify a data input version.')
 args,_=parser.parse_known_args()
 
 # retrieve binning on L/pitch
@@ -48,8 +49,6 @@ def getParallelMeans(strHist):
       opt = strHist[3]
       exp = strHist[9]
       geo = strHist[10] 
-      if args.debug:
-            print("Draw options: ", plot,cut,opt)
       # draw the histogram
       inRoot.tree.Draw(plot, cut, opt)
       hist = r.gDirectory.Get(strHist[4])
@@ -58,6 +57,9 @@ def getParallelMeans(strHist):
             return
       else:
             entr = hist.GetEntries()
+            if args.debug:
+                  print("Draw options: ", plot,cut,opt)
+                  print("Histogram has {} entries.".format(entr))
             # if the histogram more entries than the threshold  
             if ( entr > threshold ):
                   mean = hist.GetMean()
@@ -75,6 +77,7 @@ def getParallelMeans(strHist):
                         # use a larger RMS, that is not effected by the large number of 0s, in order to increase the fit range
                         clone.GetXaxis().SetRange((maximumBin+1), clone.GetNbinsX())
                         rms_without_zeros = clone.GetRMS()
+                        entr_without_zeros = clone.GetEntries()
                         fit_range = (maximum, (maximum+3*rms_without_zeros)) 
                         f1 = r.TF1("f1_"+str(strHist[4]),"[0]*exp(-x/[1])",maximum,(maximum+10*rms_without_zeros))
                         f1.SetParameters(1,rms_without_zeros)
@@ -84,14 +87,14 @@ def getParallelMeans(strHist):
                         tau = rms
                         tauErr = rmsErr
                         trialStart = 0
-                        while trialStart<3:
+                        while trialStart<4:
                               if trialStart>0:
                                     # Set new range on the histgram to extract 2nd/3rd maximum
                                     clone.GetXaxis().SetRange((maximumBin+1), clone.GetNbinsX())
                                     maximumBin = clone.GetMaximumBin()
                               peakCont = clone.GetBinContent( maximumBin )
                               # make sure that the tail is not the major determinator of the fit
-                              if peakCont < entr/1000.:
+                              if peakCont < entr_without_zeros/5.:
                                     # print("Maximum bin has too low stats.. continue")
                                     trialStart+=1
                                     continue
@@ -106,7 +109,7 @@ def getParallelMeans(strHist):
                                           tau = f1.GetParameter(1)
                                           tauErr = f1.GetParError(1)
                                           # only converging fits, with tau>0 and tauErr/tau<10% considered
-                                          if (tau>0.) and (tau<3*rms_without_zeros) and (tauErr!=0) and (tauErr/tau<0.2) and (fresults.Chi2()/fresults.Ndf()<chi2):
+                                          if (tau>0.) and (tau<10*rms_without_zeros) and (tauErr!=0) and (tauErr/tau<0.2) and (fresults.Chi2()/fresults.Ndf()<chi2):
                                                 chi2 = fresults.Chi2()/fresults.Ndf()
                                                 fit_range = (peakPos, maximumFlux)
                                                 converged = True
@@ -158,7 +161,7 @@ if energies!=test_energies:
 
 print("For energies: ", energies)
 
-outFilePath = sharedOutPath()+'/data/averages/v2/'+str(args.data)+'/'
+outFilePath = sharedOutPath()+'/data/averages/'+args.useVersion+'/'+str(args.data)+'/'
 if args.fit:
       outFilePath += 'fittedExp/'
 if not os.path.exists(outFilePath):
@@ -180,7 +183,7 @@ for d in lst:
       # write averages for all L-p cells / day 
       outFileName = outFilePath+str(d)+'_min_'+str(threshold)+'ev.txt'
       # get average geomagnetic index of this day
-      meanGeomIndex = getGeomIndex(data,d)
+      meanGeomIndex = getGeomIndex(data, d)
       print("Write averages in: ", outFileName)
       outFile = open(outFileName, 'w')
       outFile.write('energy L pitch entries mean meanErr rms rmsErr chi2 fit avGeomIndex\n')
@@ -202,7 +205,7 @@ for d in lst:
                   for iP,P in enumerate(Pbins[0:numPbin-1]):
                         writeOut = str('{} {} {} '.format(round(energies[ien],1), L, P))
                         histName = 'hist_day_'+str(d)+'_energy_'+str(en)+'_L_'+str(L)+'_p_'+str(P)
-                        lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'(50,0,'+str(50*binWidth)+')'), 'field>25000 && energy=='+str(en)+' && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit, meanGeomIndex ]
+                        lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'(50,0,'+str(50*binWidth)+')'), 'field>25000 && energy_'+str(L)+'_'+str(P)+'=='+str(energies[ien])+' && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit, meanGeomIndex ]
                         commands.append(lst_comm)
                         count += 1
 
@@ -253,6 +256,9 @@ for d in lst:
                               tlegends[iest][ifinal].Draw()
                               can.Modified()
                               head, tail = os.path.split( filename.replace('root','pdf').replace('all', 'day_'+str(d)+'_energy_'+str(energies[iest])+'_L_'+str(Lbins[ifinal])) )
+                              tail = 'day_'+str(d)+'_energy_'+str(energies[iest])+'_L_'+str(Lbins[ifinal])+'.pdf'
+                              if args.fit:
+                                    head = head+'/fittedExp/'
                               if args.threshold!=100:
                                     head = head+'/'+str(args.threshold)+'ev/'
                               if not os.path.exists(head):

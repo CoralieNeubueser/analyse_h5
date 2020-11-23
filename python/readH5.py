@@ -13,6 +13,7 @@ r.gStyle.SetPadRightMargin(0.2)
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
 parser.add_argument('--data', type=str, choices=['hepd','hepp'], required=True, help='Define patht to data file.')
+parser.add_argument('--useVersion', type=str, default='v2', help='Define wether v1/ (no flux=0) or v2/ (all fluxes) is written.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 args,_=parser.parse_known_args()
 
@@ -23,6 +24,8 @@ f = h5py.File(filename, 'r')
 # read h5 file
 if args.debug:
     print(list(f.keys()))
+
+version=args.useVersion
 
 for dset in traverse_datasets(f):
     if args.debug:
@@ -86,13 +89,13 @@ outRootDir = os.path.split(filename)[0]
 print(outRootDir)
 
 if 'L3_test' in outRootDir:
-    useDir = sharedOutPath()+"/data/root/v2/L3_test/"+os.path.split(outRootDir)[1]+'/'
+    useDir = sharedOutPath()+"/data/root/"+version+"/L3_test/"+os.path.split(outRootDir)[1]+'/'
     pathlib.Path(useDir).mkdir(parents=True, exist_ok=True) 
     outRootName = useDir+os.path.split(filename)[1].replace("h5","root")
     
 else:
     outRootName = os.path.split(filename)[1].replace("h5","root")
-    outRootName = sharedOutPath()+"/data/root/v2/"+outRootName
+    outRootName = sharedOutPath()+"/data/root/"+version+"/"+outRootName
 
 print("Writing output into root file: ", outRootName)
 outRoot = r.TFile( outRootName , 'recreate' )
@@ -111,6 +114,8 @@ T = array( 'f', [ 0. ] )
 Tday = array( 'i', [0] )
 Lo = array( 'i', [ 0 ] )
 La = array( 'i', [ 0 ] )
+geomLo = array( 'i', [ 0 ] )
+geomLa = array( 'i', [ 0 ] )
 B = array( 'f', [ 0. ] )
 B_eq = array( 'f', [ 0. ] )
 Ev = array( 'i', [ 0 ] )
@@ -129,18 +134,29 @@ tree.Branch( 'time', T, 'time/F' )
 tree.Branch( 'day', Tday, 'day/I' )
 tree.Branch( 'Long', Lo, 'Long/I' )
 tree.Branch( 'Lat', La, 'Lat/I' )
+tree.Branch( 'geomLong', geomLo, 'geomLong/I' )
+tree.Branch( 'geomLat', geomLa, 'geomLat/I' )
 tree.Branch( 'field', B, 'field/F' )
 tree.Branch( 'field_eq', B_eq, 'field_eq/F' )
 
 # define the L-pitch map
-vecCells = []
-numCells=0
+energyBins = getEnergyBins(True, False)
+if args.data=='hepp':
+    energyBins = getEnergyBins(False, True)
+
+vecCells = {} 
 for cell_l in range(0,len(l_x_bins)-1):
     for cell_p in range(0,len(p_x_bins)-1):
-        vecCells.append( r.std.vector(float)() )
-        tree.Branch( 'flux_'+str(l_x_bins[cell_l])+'_'+str(p_x_bins[cell_p]), vecCells[numCells]) 
-        numCells+=1
-print("L-alpha map has {} cells.".format(numCells))
+        vecCells[cell_l,cell_p] = r.std.vector(float)()
+        tree.Branch( 'flux_'+str(l_x_bins[cell_l])+'_'+str(p_x_bins[cell_p]), vecCells[cell_l,cell_p]) 
+vecCellsEn = {} 
+for cell_l in range(0,len(l_x_bins)-1):
+    for cell_p in range(0,len(p_x_bins)-1):
+        vecCellsEn[cell_l,cell_p] = r.std.vector(float)()
+        tree.Branch( 'energy_'+str(l_x_bins[cell_l])+'_'+str(p_x_bins[cell_p]), vecCellsEn[cell_l,cell_p])
+
+
+print("L-alpha map has {} cells.".format(len(vecCells)))
 
 # write 2d histograms
 hist2D_l_pitch=r.TH2D("hist2D_l_pitch","hist2D_l_pitch",l_bins,np.array(l_x_bins),len(dset_p[0]),0,180)
@@ -243,9 +259,11 @@ for iev,ev in enumerate(dset2):
         # loop through pitch
         for ip,flux in enumerate(en):
 
+            if version == 'v1' and flux==0:
+                continue
+
             # fill tree only for non-zero fluxes
             # fill also 0s, decided 2020/10/26
-            # if float(flux)!=0:
             countFlux+=1
             # correct flux by new geometrical factors
             flux = flux*getGeomCorr(hepd, ie)
@@ -264,7 +282,7 @@ for iev,ev in enumerate(dset2):
                 minE = dset_en[0][0]
                 binE = (maxE-minE)/16.
                 newbin = math.floor(ie/16.)
-                E_vec.push_back(float(round(energies[newbin],5)))
+                E_vec.push_back(round(energies[newbin],5))
                 F_vec_en[newbin] += flux
                 Pvalue = dset_p[0][ip]
                 P_vec.push_back(int(Pvalue))
@@ -275,7 +293,7 @@ for iev,ev in enumerate(dset2):
                 if ip==0:
                     Pvalue = dset_p[0][ip]/2.
                 P_vec.push_back(int(Pvalue))
-                E_vec.push_back(float(energies[ie]))
+                E_vec.push_back(round(energies[ie],1))
                 F_vec_en[ie] += float(flux)
                 
             # calculate equatorial pitch angle
@@ -284,7 +302,7 @@ for iev,ev in enumerate(dset2):
 
             if iev==1 and args.debug:
                 print("--- Energy bin:      ", ie)
-                print("--- Energy:          ", energies[ie])
+                print("--- Energy:          ", round(energies[ie],1))
                 print("--- Pitch bin:       ", ip)
                 print("--- Pitch:           ", Pvalue)
                 print("--- Pitch_eq:        ", alpha_eq)
@@ -292,16 +310,15 @@ for iev,ev in enumerate(dset2):
                 print("--- Day time [h]:    ", time_calc/60/60 )
 
             # fill flux branches of L-pitch
-            icell = 0
             found = False
             for cell_l in range(0,len(l_x_bins)-1):
                 for cell_p in range(0,len(p_x_bins)-1):
                     if l_x_bins[cell_l] < Lshell and l_x_bins[cell_l+1] > dset1[iev]:
                         if p_x_bins[cell_p] < alpha_eq and p_x_bins[cell_p+1] > alpha_eq:
                             found = True
-                            vecCells[icell].push_back(flux)
+                            vecCells[cell_l,cell_p].push_back(flux)
+                            vecCellsEn[cell_l,cell_p].push_back(round(energies[ie],1))
                             break
-                    icell+=1
                 if found==True:
                     break
                     
@@ -318,6 +335,8 @@ for iev,ev in enumerate(dset2):
     C[0] = countInt
     Lo[0] = lonInt
     La[0] = latInt
+    geomLo[0] = gmlonInt
+    geomLa[0] = gmlatInt
     B[0] = Bfield
     B_eq[0] = Beq
     N[0] = countFlux
@@ -334,7 +353,9 @@ for iev,ev in enumerate(dset2):
     F_vec_pt.resize(9)
     F_vec_en.resize(energy_bins)
     for vec in vecCells:
-        vec.clear()
+        vecCells[vec].clear()
+    for vec in vecCellsEn:
+        vecCellsEn[vec].clear()
 
 prep2D(hist2D_l_pitch, 'L value', '#alpha_{eq} [deg]', '#sum flux', False)
 prep2D(hist2D_l_pitch_en, 'L value', '#alpha_{eq} [deg]', '#entries', False)

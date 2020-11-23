@@ -15,6 +15,7 @@ parser.add_argument('--data', type=str, help='Define input data.', required=True
 parser.add_argument('--thr', type=int, default=100, help='Define minimum statistics used.')
 parser.add_argument('--sigma', type=int, default=3, help='Define minimum sigma for flux values > <phi>+sigma*phi_rms.')
 parser.add_argument('--fitted', action='store_true', help='Use exponential fit tau value for threshold.')
+parser.add_argument('--useVersion', type=str, default='v2', help='Set the version.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 args,_=parser.parse_known_args()
 
@@ -52,7 +53,7 @@ for ev in inRoot.tree:
             break
 test_energies = sorted(test_energies, key=float)
 #if energies!=test_energies:
-#      energies=test_energies
+#    energies=test_energies
 print("Energy bins: ", energies)
 
 # output tree
@@ -69,9 +70,12 @@ Day = array('i', [0])
 Time = array( 'f', [0.] )
 Longitude = array('i', [0])
 Latitude = array('i', [0])
+Longitude_geom = array('i', [0])
+Latitude_geom = array('i', [0])
 Lshell = array('f', [0.])
 Alpha_eq = array('f', [0.])
 Energy = array('f', [0.])
+GeomInd = array('i', [0])
 
 out_tree.Branch( 'event', Ev, 'event/I' )
 out_tree.Branch( 'flux', Flux, 'flux/F' )
@@ -80,13 +84,19 @@ out_tree.Branch( 'day', Day, 'day/I' )
 out_tree.Branch( 'time', Time, 'time/F' )
 out_tree.Branch( 'lon', Longitude, 'lon/I' )
 out_tree.Branch( 'lat', Latitude, 'lat/I' )
+out_tree.Branch( 'geom_lon', Longitude_geom, 'geom_lon/I' )
+out_tree.Branch( 'geom_lat', Latitude_geom, 'geom_lat/I' )
 out_tree.Branch( 'L', Lshell, 'L/F' )
 out_tree.Branch( 'alpha', Alpha_eq, 'alpha/F' )
 out_tree.Branch( 'energy', Energy, 'energy/F' )
+out_tree.Branch( 'geomIndex', GeomInd, 'geomIndex/I' )
 
 # get a list of all days, for which data was taken
 days = getDays(tree)
 count = int(0)
+
+# read Data file with geom Indices
+dataDict = readGeomIndex()
 
 for day in days:
     
@@ -101,9 +111,10 @@ for day in days:
         av_Lalpha.append( dict() )
 
     # read in txt files with averages
-    path = 'data/averages/'+args.data+'/'
+    path = sharedOutPath()+'/data/averages/'+args.useVersion+'/'+args.data+'/'
     if args.fitted:
         path += 'fittedExp/'
+    print("Average/RMS read from file: ", path+str(day)+'_min_'+str(args.thr)+'ev.txt')
     file = open(path+str(day)+'_min_'+str(args.thr)+'ev.txt', "r")
     next(file)
     for line in file:
@@ -142,30 +153,42 @@ for day in days:
                 average = av_Lalpha[energy_bin][(L_bin, alpha_bin)][0]
                 rms = av_Lalpha[energy_bin][(L_bin, alpha_bin)][1]
                 # get daily average in L-alpha cell
-                fiveSigma = average + args.sigma*rms
+                xSigma = average + args.sigma*rms
                 flux = getattr(tree,"flux_"+str(L_bin)+"_"+str(alpha_bin))
                 
-                if len(flux) > ia and flux[ia]>fiveSigma:
+                if len(flux) > ia and flux[ia]>xSigma:
                     if args.debug:
                         print("L-alpha bins : ", L_bin, alpha_bin)
-                        print("average :      ",  average)
-                        print("rms :          ",  rms)
-                        print('Five sigma:    ', fiveSigma)
-                        print('Found flux:    ',flux[ia])
+                        print("average :      ", average)
+                        print("rms :          ", rms)
+                        print('X sigma:       ', xSigma)
+                        print('Found flux:    ', flux[ia])
                     
                     hist2D[energy_bin].Fill(L, alpha, flux[ia])
                     hist2D_en[energy_bin].Fill(L, alpha)
                     hist2D_loc[energy_bin].Fill(ev.Long, ev.Lat, flux[ia])
                     hist2D_time[energy_bin].Fill(ev.time,flux[ia])
 
+                    # get minutes from digits in 'time'
+                    storedTime = ev.time
+                    hour = int(math.floor(storedTime))
+                    minute = int(math.floor((storedTime - hour)*60))
+                    geoIndex = dataDict[(day, hour, minute)]
+
                     # fill output tree
                     Ev[0] = count
                     Flux[0] = flux[ia]
-                    Signal[0] = (flux[ia]-average)/rms
+                    if rms!=0:
+                        Signal[0] = (flux[ia]-average)/rms
+                    else:
+                        Signal[0] = 1.
                     Day[0] = day
-                    Time[0] = ev.time # daily hours
+                    Time[0] = storedTime # daily hours
                     Longitude[0] = ev.Long
                     Latitude[0] = ev.Lat
+                    Longitude_geom[0] = ev.geomLong
+                    Latitude_geom[0] = ev.geomLat
+      
                     # write in L bins
                     binned_L = hist1D_L.GetBinLowEdge(hist1D_L.FindBin(L)) 
                     Lshell[0] = binned_L
@@ -173,6 +196,8 @@ for day in days:
                     binned_alpha = hist1D_alpha.GetBinLowEdge(hist1D_alpha.FindBin(alpha))
                     Alpha_eq[0] = binned_alpha
                     Energy[0] = energy[ia]
+                    GeomInd[0] = geoIndex
+
                     out_tree.Fill()
 
                     count+=1

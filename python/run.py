@@ -11,6 +11,7 @@ parser.add_argument('--month', type=int, required=False, help='Merge orbits of a
 parser.add_argument('--allHists', action='store_true', help='Merge all runs, including the histograms.')
 parser.add_argument('--ana', action='store_true', help='Analyse all runs.')
 parser.add_argument('--test', action='store_true', help='Analyse test runs.')
+parser.add_argument('--useVersion', type=str, default='v2', help='Define wether flux=0 is stored.')
 parser.add_argument('--submit', action='store_true', help='Submit to HTCondor batch farm.')
 parser.add_argument('-q','--quiet', action='store_true', help='Run without printouts.')
 args,_=parser.parse_known_args()
@@ -65,9 +66,9 @@ if not args.merge and not args.ana:
 
         if args.test:
             outRootDir = os.path.split(run)[0]
-            outfile = sharedOutPath()+"data/root/v2/L3_test/"+os.path.split(outRootDir)[1]+'/'+(os.path.split(run)[1]).replace("h5","root")
+            outfile = sharedOutPath()+"data/root/"+args.useVersion+"/L3_test/"+os.path.split(outRootDir)[1]+'/'+(os.path.split(run)[1]).replace("h5","root")
         else:
-            outfile = sharedOutPath()+"data/root/v2/"+(os.path.split(run)[1]).replace("h5","root")
+            outfile = sharedOutPath()+"data/root/"+args.useVersion+"/"+(os.path.split(run)[1]).replace("h5","root")
             print(outfile)
 
         # Test if output exists
@@ -82,6 +83,8 @@ if not args.merge and not args.ana:
                 cmd+=' --data hepd'
             elif args.hepp:
                 cmd+=' --data hepp'
+            if args.useVersion is not 'v2':
+                cmd+=' --useVersion '+args.useVersion
             print(cmd)
 
             if args.submit:
@@ -91,10 +94,10 @@ if not args.merge and not args.ana:
 
 # run analysis on single merged root file
 elif args.ana and not args.test:
-    mge = sharedOutPath()+'data/root/v2/all_hepd_'+str(runs)+'runs.root'
+    mge = sharedOutPath()+'data/root/'+args.useVersion+'/all_hepd_'+str(runs)+'runs.root'
     print("Run analysis on single file: ", str(mge))
     if args.hepp:
-        mge = 'data/root/v2/all_hepp_'+str(runs)+'runs.root'
+        mge = 'data/root/'+args.useVersion+'/all_hepp_'+str(runs)+'runs.root'
 
     # open root file
     runana='python3 python/analyseRoot.py --inputFile '+str(mge)
@@ -103,8 +106,8 @@ elif args.ana and not args.test:
 elif args.ana and args.test:
     tests=['L3h5_orig', 'L3h5_rate', 'L3h5_05_95', 'L3h5_rate_05_95']
     for t in tests:
-        mge = sharedOutPath()+"data/root/v2/L3_test/"+t+'/all.root'
-        mge = 'data/root/v2/all_hepd_'+str(runs)+'runs.root'
+        mge = sharedOutPath()+"data/root/"+args.useVersion+"/L3_test/"+t+'/all.root'
+        mge = 'data/root/'+args.useVersion+'/all_hepd_'+str(runs)+'runs.root'
         print("Run analysis on single file: ", str(mge))
 
         # open root file 
@@ -118,25 +121,25 @@ elif args.merge and not args.test:
 
     if args.hepd:
         # write 
-        mge = sharedOutPath()+'data/root/v2/hepd/all_hepd.root'
+        mge = sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd.root'
         findOld = None
         runList = []
         if args.day:
-            runList = glob.glob(sharedOutPath()+'data/root/v2/CSES_HEP_DDD_*'+str(args.day)+'*.root')
-            mge = sharedOutPath()+'data/root/v2/hepd/all_hepd_'+str(args.day)+'_'+str(len(runList))+'_runs.root'
-            findOld = glob.glob(sharedOutPath()+'data/root/v2/hepd/all_hepd_'+str(args.day)+'*.root')
+            runList = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/CSES_HEP_DDD_*'+str(args.day)+'*.root')
+            mge = sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(args.day)+'_'+str(len(runList))+'_runs.root'
+            findOld = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(args.day)+'*.root')
             runs = len(runList)
         elif args.month:
-            runList = glob.glob(sharedOutPath()+'data/root/v2/CSES_HEP_DDD_*'+str(args.month)+'*.root')
-            mge = sharedOutPath()+'data/root/v2/hepd/all_hepd_'+str(args.month)+'_'+str(len(runList))+'_runs.root'
-            findOld = glob.glob(sharedOutPath()+'data/root/v2/hepd/all_hepd_'+str(args.month)+'*')
+            runList = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/CSES_HEP_DDD_*'+str(args.month)+'*.root')
+            mge = sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(args.month)+'_'+str(len(runList))+'_runs.root'
+            findOld = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(args.month)+'*')
             runs = len(runList)
         else:
-            runList = glob.glob(sharedOutPath()+'data/root/v2/CSES_HEP_DDD_*.root')
+            runList = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/CSES_HEP_DDD_*.root')
             runs = len(runList)
     elif args.hepp: 
-        mge = sharedOutPath()+'data/root/v2/hepp/all_hepp.root'
-        runList = glob.glob(sharedOutPath()+'data/root/v2/CSES_01_HEP_1_*.root')
+        mge = sharedOutPath()+'data/root/'+args.useVersion+'/hepp/all_hepp.root'
+        runList = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/CSES_01_HEP_1_*.root')
     
     oldruns=0
     print(findOld)
@@ -167,8 +170,8 @@ elif args.merge and args.test:
 
     tests=['L3h5_orig', 'L3h5_rate', 'L3h5_05_95', 'L3h5_rate_05_95']
     for t in tests:    
-        mge = "data/root/v2/L3_test/"+t+'/all.root'
-        runList = glob.glob(sharedOutPath()+'data/root/v2/L3_test/'+t+'/CSES_*.root')
+        mge = "data/root/"+args.useVersion+"/L3_test/"+t+'/all.root'
+        runList = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/L3_test/'+t+'/CSES_*.root')
         runs = len(runList)
         if runs>0:
             print("Merge files in: ", mge)

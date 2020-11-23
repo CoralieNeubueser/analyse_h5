@@ -328,14 +328,22 @@ def readGeomIndex():
     dataPath = sharedOutPath()+"/data/geomIndices/BDR_SymH_AE_Indices_merged2018and2019_FlagV4b_All.txt"
     file = open(dataPath, "r")
     next(file)
-    return file.readlines()[20:]
+    lines = file.readlines()[20:]
+    newDict = {}
+    for line in lines:
+        c, d, t, i1, i2, flag = line.strip().split(' ')
+        pair = (int(d.replace('-','')), int(t[:2]), int(t[3:5]))
+        newDict[pair] = int(flag)
 
-def getGeomIndex(lines, day):
+    return newDict
+
+def getGeomIndex(dic, day):
     
     allGeomIndices = []
-    for line in lines:
-        columns = [i for i in line.split()]      
-        data_day = int(columns[1].replace('-',''))
-        if data_day == day:
-            allGeomIndices.append(int(columns[5]))
+    for line in dic:
+        if line[0] == day:
+            allGeomIndices.append(day[line])
+    
     return np.mean(np.array(allGeomIndices))
+
+    

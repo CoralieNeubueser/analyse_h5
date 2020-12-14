@@ -94,8 +94,8 @@ if 'L3_test' in outRootDir:
     outRootName = useDir+os.path.split(filename)[1].replace("h5","root")
     
 else:
-    outRootName = os.path.split(filename)[1].replace("h5","root")
-    outRootName = sharedOutPath()+"/data/root/"+version+"/"+outRootName
+    rootName = os.path.split(filename)[1].replace("h5","root")
+    outRootName = sharedOutPath()+"/data/root/"+version+"/"+args.data+'/'+rootName
 
 print("Writing output into root file: ", outRootName)
 outRoot = r.TFile( outRootName , 'recreate' )

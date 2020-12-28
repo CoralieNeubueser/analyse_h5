@@ -20,6 +20,7 @@ args,_=parser.parse_known_args()
 runs = args.numRuns
 os.system('source /opt/exp_software/limadou/set_env_standalone.sh')
 
+det = 'hepd'
 datapaths = []
 if args.hepd:
     datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*.h5')
@@ -30,7 +31,7 @@ if args.hepd:
         datapaths += glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3h5_rate_05_95/*.h5')
 
 elif args.hepp:
-
+    det = 'hepp'
     # get HEPP data of quiet period 1.-5.08.2018
     datapaths = glob.glob('/home/LIMADOU/cneubueser/public/HEPP_august_2018/*.h5')
     
@@ -43,6 +44,8 @@ elif args.hepp:
 
 # run on single semi-orbits
 if not args.merge and not args.ana:
+    
+    args_file = open(home()+'/log/arguments.txt', "w")
 
     if len(datapaths) < runs:
         print("Only {} files available for reading. ".format(len(datapaths)))
@@ -65,7 +68,7 @@ if not args.merge and not args.ana:
             print('Try next run..')
             continue
 
-        buildPath = sharedOutPath()+"data/root/"+args.useVersion+"/"
+        buildPath = sharedOutPath()+"data/root/"+args.useVersion+"/"+det+'/'
         if args.integral:
             buildPath += str(args.integral)+"s/"    
         
@@ -97,10 +100,18 @@ if not args.merge and not args.ana:
             print(cmd)
 
             if args.submit:
-                SubmitToCondor(cmd, run, irun)
+                exefilename = 'job_%s.sh'%(str(os.path.split(run)[1].replace('.h5','')))
+                exefile = writeExecutionFile(home()+'/log/'+exefilename, cmd)
+                print("Write execution file to:", exefilename)
+                args_file.write("%s\n"%(home()+'/log/'+exefilename))
             else:
                 os.system(cmd)
+                
+    args_file.close()
+    if args.submit:
+        SubmitListToCondor(args_file)
 
+        
 # run analysis on single merged root file
 elif args.ana and not args.test:
     mge = sharedOutPath()+'data/root/'+args.useVersion+'/all_hepd_'+str(runs)+'runs.root'

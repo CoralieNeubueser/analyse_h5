@@ -24,6 +24,7 @@ parser.add_argument('--fitFunction', type=str, default='Exp', choices=['Exp','Po
 parser.add_argument('--day', type=int, default=None, help='Specify a day.')
 parser.add_argument('--useVersion', type=str, default='v2', help='Specify a data input version.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
+parser.add_argument('--integrateEn', action='store_true', help='Merge all fluxes over all energy bins.')
 args,_=parser.parse_known_args()
 
 # retrieve binning on L/pitch
@@ -32,8 +33,8 @@ numPbin, Pbins = getPitchBins()
 # retrieve threshold
 threshold = args.threshold
 debug = args.debug
-hepd = args.data == 'hepd'
-hepp = args.data == 'hepp'
+hepd = (args.data == 'hepd')
+hepp = (args.data == 'hepp')
 
 print(len(Lbins[0:numLbin]), Lbins[0:numLbin])
 print(len(Pbins[0:numPbin-1]), Pbins[0:numPbin-1])
@@ -185,26 +186,31 @@ if args.day:
       lst = [int(args.day)]
 else:
       lst = getDays(inRoot.tree)
-en_bins, energies, en_max = getEnergyBins(hepd, hepp)
 print("To test days: ", lst)
 
-test_energies = set()
-for ev in inRoot.tree:
-      if len(test_energies) < en_bins:
+en_bins, energies, en_max = 1, [0.], 0.
+if args.integrateEn==False:
+    en_bins, energies, en_max = getEnergyBins(hepd, hepp)
+    print(energies)
+    # test if pre-defined energy values are the same as in the root tree
+    # important for the energy selection!
+    test_energies = set()
+    for ev in inRoot.tree:
+        if len(test_energies) < en_bins:
             for e in ev.energy:
-                  test_energies.add(e)
-      else:
+                test_energies.add(e)
+        else:
             break
-test_energies = sorted(test_energies, key=float)
-if energies!=test_energies:
-      energies=test_energies
-
-print("For energies: ", energies)
+    test_energies = sorted(test_energies, key=float)
+    if energies!=test_energies:
+        energies=test_energies
+    print("For energies: ", energies)
 
 outFilePath = sharedOutPath()+'/data/averages/'+args.useVersion+'/'+str(args.data)+'/'
 if args.integral:
-      outFilePath = sharedOutPath()+'/data/averages/'+args.useVersion+'/'+str(args.data)+'/'+str(args.integral)+'s/'
-
+    outFilePath = sharedOutPath()+'/data/averages/'+args.useVersion+'/'+str(args.data)+'/'+str(args.integral)+'s/'
+if args.integrateEn:
+    outFilePath += 'integratedEnergies/' 
 if args.fit:
       outFilePath += 'fitted'+args.fitFunction+'/'
 if not os.path.exists(outFilePath):
@@ -235,8 +241,10 @@ for d in lst:
       
       for ien,en in enumerate(energies):
             # get geometrcal factor for meaningful histogram binning 
+            geomFactor=1.
             if hepd:
                   binWidth = 1./getGeomFactor(ien)
+                  geomFactor = getGeomFactor(ien)
             else:
                   # hepp data experience much higher flux values in lowest energy bin
                   # but this will not be taken into account in the number of bins of the histogram
@@ -248,7 +256,10 @@ for d in lst:
                   for iP,P in enumerate(Pbins[0:numPbin-1]):
                         writeOut = str('{} {} {} '.format(round(energies[ien],1), L, P))
                         histName = 'hist_day_'+str(d)+'_energy_'+str(en)+'_L_'+str(L)+'_p_'+str(P)
-                        lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'(50,0,'+str(50*binWidth)+')'), 'field>25000 && energy_'+str(L)+'_'+str(P)+'=='+str(energies[ien])+' && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit, meanGeomIndex, getGeomFactor(ien) ]
+                        if args.integrateEn:
+                            lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'(50,0,'+str(50*binWidth)+')'), 'field>25000 && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit, meanGeomIndex, geomFactor ]
+                        else:
+                            lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'(50,0,'+str(50*binWidth)+')'), 'field>25000 && energy_'+str(L)+'_'+str(P)+'=='+str(energies[ien])+' && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit, meanGeomIndex, geomFactor ]
                         commands.append(lst_comm)
                         count += 1
 
@@ -280,7 +291,7 @@ for d in lst:
                   thstacks[energyIndex][lIndex].Add(h)
                   
             print('legend E entries: ',len(tlegends))
-            print('legend L entries: ',len(tlegends[1]))
+            print('legend L entries: ',len(tlegends[0]))
 
             for iest in range(len(energies)):
                   for ifinal in range(len(Lbins[0:numLbin])):

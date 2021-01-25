@@ -83,6 +83,7 @@ p_bins, p_x_bins = getPitchBins()
 RE = 6378.137 
 
 if args.data=='hepp':
+    hepp = True
     head, tail = os.path.split(filename)
     times = re.findall('\d+', tail)
     time_blanc = int(str(times[1]+times[2])) #str(dset_time[0])
@@ -244,7 +245,7 @@ for iev,ev in enumerate(dset2):
             # w seems to have been wrongly calculated in T instead of Gauss, or in 10kHz
             # translate in nT
             Bfield = dset_field[iev]*me/qe*2*np.pi*1e9
-            BfieldSum = Bfield
+            BfieldSum += Bfield
             Lshell = dset1[iev]
             # sum over all channel counts per s
             for channel_count in dset_count[iev]:
@@ -287,8 +288,6 @@ for iev,ev in enumerate(dset2):
                 # correct flux by new geometrical factors
                 flux = flux*getGeomCorr(hepd, ie)
 
-                # fill pitch-flux vector (summ over fluxes over all energies, normalise before to MeV, using the energy bin width)
-                vec_pt[ip] += pow(float(flux/getEnergyBinWidth(hepd, ie)),2)
                 vec_nPt[ip] += 1
             
                 # HEPP data has stores counts per 9 different devices (merge all)                 
@@ -310,10 +309,12 @@ for iev,ev in enumerate(dset2):
                         Pvalue = dset_p[0][ip]/2.
                     vec_en[ie] += pow(flux,2)
                 
+                # fill pitch-flux vector (summ over fluxes over all energies, normalise before to MeV, using the energy bin width)
+                vec_pt[ip] += pow(float(flux/getEnergyBinWidth(hepd, ie)),2)
                 # calculate equatorial pitch angle
                 alpha_eq = getAlpha_eq( Pvalue, Bfield, Beq )
                 # fill Energy-local pitch matrix
-                # store correspinding L/alpha values
+                # store corresponding L/alpha values
                 if (ie,ip) in vecSum:
                     vecSum[(ie,ip)] += flux
                     vecAlphaL[(ie,ip)] = [vecAlphaL[(ie,ip)][0]+alpha_eq, vecAlphaL[(ie,ip)][1]+round(Lshell,1), vecAlphaL[(ie,ip)][2]+1.]
@@ -385,7 +386,7 @@ for iev,ev in enumerate(dset2):
     # fill the vector 'flux' and the corresponding 'energy'/'pitch'/'alpha' vectors
     for (key, value) in vecSum.items():
         F_vecvec.push_back(value / float(countIntSec))
-        E_vec.push_back(energies[key[0]])
+        E_vec.push_back(round(energies[key[0]],1))
         P_vec.push_back(p_x_bins[key[1]])
         A_vec.push_back(vecAlphaL[key][0]/vecAlphaL[key][2])
         if value!=0:

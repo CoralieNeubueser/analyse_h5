@@ -130,7 +130,8 @@ def getEnergyBinWidth(hepd, energyBin):
     enBorder=np.array([0.5, 4., 8.96811, 10.9642,  13.4045,  16.388,   20.0355,  24.4949,  29.9468,  36.6122,  44.7611,  54.7237,  66.9037 ])
     # HEPP-L fluxes need normalisation to 11keV
     if not hepd:
-        enBorder=np.array(16*[0.011])
+        enBorder=np.array([0.1, 0.28125, 0.4625, 0.64375, 0.825, 1.00625, 1.1875, 1.36875, 1.55, 1.73125, 1.9125, 2.09375, 2.275, 2.45625, 2.6375, 2.81875, 3.0])
+        #enBorder=np.array(16*[0.011])
     return enBorder[energyBin+1]-enBorder[energyBin]
 
 # return a list of days

@@ -23,7 +23,9 @@ os.system('source /opt/exp_software/limadou/set_env_standalone.sh')
 det = 'hepd'
 datapaths = []
 if args.hepd:
-    datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*.h5')
+    #datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*.h5')
+    # run all orbits in August 2018
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*201808*.h5')
     if args.test:
         datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3h5_orig/*.h5')
         datapaths += glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3h5_rate/*.h5')
@@ -33,7 +35,8 @@ if args.hepd:
 elif args.hepp:
     det = 'hepp'
     # get HEPP data of quiet period 1.-5.08.2018
-    datapaths = glob.glob('/home/LIMADOU/cneubueser/public/HEPP_august_2018/*.h5')
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/analysis/data/h5/HEPP_august_2018/*.h5')
+    # ('/home/LIMADOU/cneubueser/public/HEPP_august_2018/*.h5')
     
     # select HEPP data from 22-26.02.2019 (solar quiet period) 
     #datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190222*.h5')
@@ -61,7 +64,10 @@ if not args.merge and not args.ana:
         # calculate time between start and stop of orbit
         duration = abs(int(OrbitDateTime[7]) - int(OrbitDateTime[5]))
         if args.hepp:
-            duration = abs(int(OrbitDateTime[5]) - int(OrbitDateTime[3]))
+            #            print(OrbitDateTime)
+            #            print(OrbitDateTime[5])
+            #            print(OrbitDateTime[3])
+            duration = abs(int(OrbitDateTime[6]) - int(OrbitDateTime[4]))
 
         if duration < 3000: ## half-orbit not completed
             print('Not full semi-orbit recorded, but only: '+str(duration)+'[mmss]')
@@ -178,7 +184,7 @@ elif args.merge and not args.test:
         merge(mge, runList, runs, args.allHists)
 
     if args.hepd:
-        cmd = 'python3 python/writeDayAverages.py --inputFile '+mge+' --data hepd --fit '
+        cmd = 'python3 python/writeDayAverages.py --inputFile '+mge+' --data hepd '
         if args.day:
             cmd += '--day '+str(args.day)
         if args.submit:

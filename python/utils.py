@@ -124,7 +124,16 @@ def getGeomFactor(energyBin):
     # geometrical factors
     ele_corr_GF = [ 131.128, 545.639, 560.297, 530.937, 477.827, 413.133, 334.176, 252.3, 204.52, 103.216, 77.5552, 61.1536 ]
     return ele_corr_GF[energyBin]
-    
+
+# returns the energy bin width, used to normalise fluxes to counts/s/cm2/sr/MeV 
+def getEnergyBinWidth(hepd, energyBin):
+    enBorder=np.array([0.5, 4., 8.96811, 10.9642,  13.4045,  16.388,   20.0355,  24.4949,  29.9468,  36.6122,  44.7611,  54.7237,  66.9037 ])
+    # HEPP-L fluxes need normalisation to 11keV
+    if not hepd:
+        enBorder=np.array([0.1, 0.28125, 0.4625, 0.64375, 0.825, 1.00625, 1.1875, 1.36875, 1.55, 1.73125, 1.9125, 2.09375, 2.275, 2.45625, 2.6375, 2.81875, 3.0])
+        #enBorder=np.array(16*[0.011])
+    return enBorder[energyBin+1]-enBorder[energyBin]
+
 # return a list of days
 def getDays(tree):
     lst_days = set()
@@ -266,22 +275,16 @@ def getCommandOutput(command):
     stdout,stderr = p.communicate()
     return {"stdout":stdout, "stderr":stderr, "returncode":p.returncode}
 
-#__________________________________________________________
-def SubmitToCondor(cmd,run,irun):
-    runpath, runname = os.path.split(run)
-    logdir = home() + '/log'
-    frunname = 'job_%s.sh'%(str(runname.replace('.h5','')))
-    print(frunname)
+#__________________________________________________________  
+def writeExecutionFile(filename, command):
     frun = None
     try:
-        frun = open(logdir+'/'+frunname, 'w')
+        frun = open(filename, 'w')
     except IOError as e:
         print("I/O error({0}): {1}".format(e.errno, e.strerror))
         time.sleep(10)
-        frun = open(logdir+'/'+frunname, 'w')
+        frun = open(filename, 'w')
         print(frun)
-
-    os.system('chmod 777 %s/%s'%(logdir,frunname))
     frun.write('#!/bin/bash\n')
     frun.write('unset LD_LIBRARY_PATH\n')
     frun.write('unset PYTHONHOME\n')
@@ -289,8 +292,23 @@ def SubmitToCondor(cmd,run,irun):
     frun.write('export JOBDIR=$PWD\n')
     frun.write('source %s\n' % (path_to_INIT))
     frun.write('cd %s\n'%(home()))
-    frun.write(cmd+'\n')
+    frun.write('source '+home()+'/env.sh\n')
+    frun.write(command+'\n')
+    os.system('chmod 777 %s'%(filename))
     
+    return frun
+
+#__________________________________________________________
+def SubmitToCondor(cmd,run,irun):
+    runpath, runname = os.path.split(run)
+    logdir = home() + '/log'
+    frunname = 'job_%s.sh'%(str(runname.replace('.h5','')))
+    print(frunname)
+
+    os.system('chmod 777 %s/%s'%(logdir,frunname))
+
+    frun = writeExecutionFile(logdir+'/'+frunname, cmd)
+
     os.system("mkdir -p %s/out"%logdir)
     os.system("mkdir -p %s/log"%logdir)
     os.system("mkdir -p %s/err"%logdir)
@@ -320,6 +338,37 @@ def SubmitToCondor(cmd,run,irun):
     p = subprocess.Popen(cmdBatch, shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 
 
+#__________________________________________________________
+# submit a list                                                                                                             
+def SubmitListToCondor(args, irun=1):
+
+    os.system("mkdir -p %s/out"%(home()+'/log/'))
+    os.system("mkdir -p %s/log"%(home()+'/log/'))
+    os.system("mkdir -p %s/err"%(home()+'/log/'))
+
+    logdir = home()+'/log/'
+    # create also .sub file here 
+    fsubname = 'condor.sub'
+    fsub = None
+    try:
+        fsub = open(logdir+'/'+fsubname, 'w')
+    except IOError as e:
+        print("I/O error({0}): {1}".format(e.errno, e.strerror))
+        time.sleep(10)
+        fsub = open(logdir+'/'+fsubname, 'w')
+
+    fsub.write('arguments             = $(ClusterID) $(ProcId)\n')
+    fsub.write('output                = %s/out/job.%s.$(ClusterId).$(ProcId).out\n'%(logdir,str(irun)))
+    fsub.write('log                   = %s/log/job.%s.$(ClusterId).log\n'%(logdir,str(irun)))
+    fsub.write('error                 = %s/err/job.%s.$(ClusterId).$(ProcId).err\n'%(logdir,str(irun)))
+    fsub.write('RequestCpus = 4\n')
+    fsub.write('+JobFlavour = "espresso"\n')
+    fsub.write("queue executable,seed from %s" % os.path.join(logdir, "arguments.txt"))    
+    fsub.close()
+
+    cmdBatch="condor_submit -name sn-01.cr.cnaf.infn.it %s/%s \n"%(logdir,fsubname)
+    print(cmdBatch)
+    p = subprocess.Popen(cmdBatch, shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 
 
 ## read in geomagnetic indices
@@ -342,7 +391,7 @@ def getGeomIndex(dic, day):
     allGeomIndices = []
     for line in dic:
         if line[0] == day:
-            allGeomIndices.append(day[line])
+            allGeomIndices.append(dic[line])
     
     return np.mean(np.array(allGeomIndices))
 

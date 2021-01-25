@@ -13,9 +13,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.', required=True)
 parser.add_argument('--data', type=str, help='Define input data.', required=True)
 parser.add_argument('--thr', type=int, default=100, help='Define minimum statistics used.')
-parser.add_argument('--sigma', type=int, default=3, help='Define minimum sigma for flux values > <phi>+sigma*phi_rms.')
+parser.add_argument('--sigma', type=int, default=1, help='Define minimum sigma for flux values > <phi>+sigma*phi_rms.')
 parser.add_argument('--fitted', action='store_true', help='Use exponential fit tau value for threshold.')
 parser.add_argument('--useVersion', type=str, default='v2', help='Set the version.')
+parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 args,_=parser.parse_known_args()
 
@@ -24,12 +25,15 @@ filename = args.inputFile
 # get L/alpha bins
 l_bins, l_x_bins = getLbins()
 numPbin, Pbins = getPitchBins()
-
+storedEn = []
 # retrieve energy bins for either hepd: True, hepp: False
 if args.data=='hepd':
     en_bins, energies, en_max = getEnergyBins(True, False)
+    storedEn.append(energies)
 else:
     en_bins, energies, en_max = getEnergyBins(False, True)
+    for ien,en in enumerate(energies):
+        storedEn.append(round(en,1))
 
 hist1D_L = r.TH1D('hist1D_L', 'hist1D_L', l_bins, np.array(l_x_bins))
 hist1D_alpha =  r.TH1D('hist1D_alpha', 'hist1D_alpha', numPbin-1, np.array(Pbins,dtype=float))
@@ -52,8 +56,8 @@ for ev in inRoot.tree:
       else:
             break
 test_energies = sorted(test_energies, key=float)
-#if energies!=test_energies:
-#    energies=test_energies
+if energies!=test_energies:
+    energies=test_energies
 print("Energy bins: ", energies)
 
 # output tree
@@ -79,7 +83,7 @@ GeomInd = array('i', [0])
 
 out_tree.Branch( 'event', Ev, 'event/I' )
 out_tree.Branch( 'flux', Flux, 'flux/F' )
-out_tree.Branch( 'signal', Signal, 'signal/F' )
+out_tree.Branch( 'counts', Signal, 'counts/F' )
 out_tree.Branch( 'day', Day, 'day/I' )
 out_tree.Branch( 'time', Time, 'time/F' )
 out_tree.Branch( 'lon', Longitude, 'lon/I' )
@@ -94,6 +98,8 @@ out_tree.Branch( 'geomIndex', GeomInd, 'geomIndex/I' )
 # get a list of all days, for which data was taken
 days = getDays(tree)
 count = int(0)
+# determine max counts for histogram later
+maxCounts=0
 
 # read Data file with geom Indices
 dataDict = readGeomIndex()
@@ -112,8 +118,11 @@ for day in days:
 
     # read in txt files with averages
     path = sharedOutPath()+'/data/averages/'+args.useVersion+'/'+args.data+'/'
+    if args.integral:
+        path += str(args.integral)+'s/'
     if args.fitted:
         path += 'fittedExp/'
+
     print("Average/RMS read from file: ", path+str(day)+'_min_'+str(args.thr)+'ev.txt')
     file = open(path+str(day)+'_min_'+str(args.thr)+'ev.txt', "r")
     next(file)
@@ -122,9 +131,9 @@ for day in days:
         # print(columns)
         col_energy = columns[0]
         energyStored = col_energy
-        en_index = energies.index( energyStored )
+        en_index = storedEn.index( energyStored )
         # filll dictionary from (L, alpha) -> (mean, rms)
-        av_Lalpha[en_index].update( {(columns[1],int(columns[2])):(columns[4],columns[6])} )
+        av_Lalpha[en_index].update( {(columns[1],int(columns[2])):(columns[4],columns[6],columns[7])} )
         
     for ev in tree:
         L = ev.L
@@ -152,8 +161,17 @@ for day in days:
             
                 average = av_Lalpha[energy_bin][(L_bin, alpha_bin)][0]
                 rms = av_Lalpha[energy_bin][(L_bin, alpha_bin)][1]
+                rmsErr = av_Lalpha[energy_bin][(L_bin, alpha_bin)][2]
                 # get daily average in L-alpha cell
-                xSigma = average + args.sigma*rms
+                # set RMS99 as threshold for 1% highest fluxes
+                xSigma = args.sigma*rms
+                if rms==0:
+                    # use bin width as threshold 
+                    xSigma = args.sigma*(2.*rmsErr)
+                # set sigma like threshold
+                if args.fitted:
+                    xSigma = average + args.sigma*rms 
+
                 flux = getattr(tree,"flux_"+str(L_bin)+"_"+str(alpha_bin))
                 
                 if len(flux) > ia and flux[ia]>xSigma:
@@ -178,8 +196,9 @@ for day in days:
                     # fill output tree
                     Ev[0] = count
                     Flux[0] = flux[ia]
-                    if rms!=0:
-                        Signal[0] = (flux[ia]-average)/rms
+                    if rmsErr!=0:
+                        # define signal as #counts, rmsErr is half-width of flux distributions
+                        Signal[0] = flux[ia]/(2.*rmsErr)
                     else:
                         Signal[0] = 1.
                     Day[0] = day
@@ -200,6 +219,8 @@ for day in days:
 
                     out_tree.Fill()
 
+                    if Signal[0]>maxCounts:
+                        maxCounts=int(Signal[0])
                     count+=1
 
     for ie in range(en_bins):
@@ -212,7 +233,7 @@ for day in days:
         inRoot.WriteObject(hist2D_en[ie],"hist2D_"+str(day)+"_highFlux_entries_energyBin_"+str(round(energies[ie],1)),'kOverwrite')
         inRoot.WriteObject(hist2D_loc[ie],"hist2D_"+str(day)+"_highFlux_location_energyBin_"+str(round(energies[ie],1)),'kOverwrite')
         inRoot.WriteObject(hist2D_time[ie],"hist2D_"+str(day)+"_highFlux_time_energyBin_"+str(round(energies[ie],1)),'kOverwrite')
-
+        
     # clean up
     inRoot.cd()
     hist2D.clear()
@@ -225,3 +246,40 @@ for day in days:
 inRoot.Close()
 outRoot.Write()
 outRoot.Close()
+
+# add second analysis part:
+# 1. fit expenential to 'counts' per day
+# 2. use the tau value as measure of the width
+# 3. add 'significance' as counts/tau to tree in order to allow for selection
+f = r.TFile( outfilename, 'update' )
+t3 = f.Get( 'events')
+print("Run in total over all: ",t3.GetEntries())
+print("with maximum counts of ",maxCounts)
+
+Significance = array('f', [0.])
+newBranch = t3.Branch('significance', Significance, 'significance/F')
+taus = []
+
+for day in days:
+    # loop through high flux tree
+    # add histogram per day of counts with maximum counts
+    hist1D_counts = r.TH1D('hist1D_counts_'+str(day),'hist1D_counts_'+str(day), int(maxCounts), 0, maxCounts)
+    for h in t3:
+        if h.day==day:
+            hist1D_counts.Fill(h.counts)
+    # fit exponential
+    f1 = r.TF1("f1_"+str(day),"[0]*exp(-x/[1])",hist1D_counts.GetBinCenter(hist1D_counts.GetMaximumBin()), hist1D_counts.GetBinCenter(hist1D_counts.FindLastBinAbove(10)))
+    f1.SetParameters(100,hist1D_counts.GetRMS())
+    fresults = hist1D_counts.Fit(f1,"R")
+    tau = f1.GetParameter(1)
+    f.WriteObject(hist1D_counts,"hist1D_counts_"+str(day),'kOverwrite')
+    taus.append(tau)
+
+# use tau to determine significance
+for h in t3:
+    iday=list(days).index(h.day)
+    Significance[0] = h.counts/taus[iday]
+    newBranch.Fill()
+
+t3.Write("events", r.TObject.kOverwrite) # save only the new version of the tree
+f.Close()

@@ -6,6 +6,7 @@ parser.add_argument('--numRuns', type=int, help='Define number of runs to be ana
 parser.add_argument('--hepd', action='store_true', help='Analyse HEPD data.')
 parser.add_argument('--hepp', action='store_true', help='Analyse HEPP data.')
 parser.add_argument('--merge', action='store_true', help='Merge all runs.')
+parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
 parser.add_argument('--day', type=int, required=False, help='Merge orbits of a specific day [yyyymmdd].')
 parser.add_argument('--month', type=int, required=False, help='Merge orbits of a specific month [yyyymm].')
 parser.add_argument('--allHists', action='store_true', help='Merge all runs, including the histograms.')
@@ -19,9 +20,12 @@ args,_=parser.parse_known_args()
 runs = args.numRuns
 os.system('source /opt/exp_software/limadou/set_env_standalone.sh')
 
+det = 'hepd'
 datapaths = []
 if args.hepd:
-    datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*.h5')
+    #datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*.h5')
+    # run all orbits in August 2018
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*201808*.h5')
     if args.test:
         datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3h5_orig/*.h5')
         datapaths += glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3h5_rate/*.h5')
@@ -29,9 +33,10 @@ if args.hepd:
         datapaths += glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3h5_rate_05_95/*.h5')
 
 elif args.hepp:
-
+    det = 'hepp'
     # get HEPP data of quiet period 1.-5.08.2018
-    datapaths = glob.glob('/home/LIMADOU/cneubueser/public/HEPP_august_2018/*.h5')
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/analysis/data/h5/HEPP_august_2018/*.h5')
+    # ('/home/LIMADOU/cneubueser/public/HEPP_august_2018/*.h5')
     
     # select HEPP data from 22-26.02.2019 (solar quiet period) 
     #datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190222*.h5')
@@ -42,6 +47,8 @@ elif args.hepp:
 
 # run on single semi-orbits
 if not args.merge and not args.ana:
+    
+    args_file = open(home()+'/log/arguments.txt', "w")
 
     if len(datapaths) < runs:
         print("Only {} files available for reading. ".format(len(datapaths)))
@@ -57,26 +64,37 @@ if not args.merge and not args.ana:
         # calculate time between start and stop of orbit
         duration = abs(int(OrbitDateTime[7]) - int(OrbitDateTime[5]))
         if args.hepp:
-            duration = abs(int(OrbitDateTime[5]) - int(OrbitDateTime[3]))
+            #            print(OrbitDateTime)
+            #            print(OrbitDateTime[5])
+            #            print(OrbitDateTime[3])
+            duration = abs(int(OrbitDateTime[6]) - int(OrbitDateTime[4]))
 
         if duration < 3000: ## half-orbit not completed
             print('Not full semi-orbit recorded, but only: '+str(duration)+'[mmss]')
             print('Try next run..')
             continue
 
+        buildPath = sharedOutPath()+"data/root/"+args.useVersion+"/"+det+'/'
+        if args.integral:
+            buildPath += str(args.integral)+"s/"    
+        
         if args.test:
             outRootDir = os.path.split(run)[0]
-            outfile = sharedOutPath()+"data/root/"+args.useVersion+"/L3_test/"+os.path.split(outRootDir)[1]+'/'+(os.path.split(run)[1]).replace("h5","root")
+            outfile = buildPath+"/L3_test/"+os.path.split(outRootDir)[1]+'/'+(os.path.split(run)[1]).replace("h5","root")
         else:
-            outfile = sharedOutPath()+"data/root/"+args.useVersion+"/"+(os.path.split(run)[1]).replace("h5","root")
-            print(outfile)
+            outfile = buildPath+(os.path.split(run)[1]).replace("h5","root")
+        print(outfile)
 
         # Test if output exists
         if os.path.isfile(outfile):
             print("Output root file already exists... \n read in the next file. ")
             runs=runs+1
         else:
+            if not os.path.isdir(buildPath):
+                os.makedirs(buildPath)
             cmd='python3 python/readH5.py --inputFile '+str(run)
+            if args.integral:
+                cmd+=' --integral '+str(args.integral)
             if not args.quiet:
                 cmd+=' --debug'
             if args.hepd:
@@ -88,10 +106,18 @@ if not args.merge and not args.ana:
             print(cmd)
 
             if args.submit:
-                SubmitToCondor(cmd, run, irun)
+                exefilename = 'job_%s.sh'%(str(os.path.split(run)[1].replace('.h5','')))
+                exefile = writeExecutionFile(home()+'/log/'+exefilename, cmd)
+                print("Write execution file to:", exefilename)
+                args_file.write("%s\n"%(home()+'/log/'+exefilename))
             else:
                 os.system(cmd)
+                
+    args_file.close()
+    if args.submit:
+        SubmitListToCondor(args_file)
 
+        
 # run analysis on single merged root file
 elif args.ana and not args.test:
     mge = sharedOutPath()+'data/root/'+args.useVersion+'/all_hepd_'+str(runs)+'runs.root'
@@ -158,7 +184,7 @@ elif args.merge and not args.test:
         merge(mge, runList, runs, args.allHists)
 
     if args.hepd:
-        cmd = 'python3 python/writeDayAverages.py --inputFile '+mge+' --data hepd --fit '
+        cmd = 'python3 python/writeDayAverages.py --inputFile '+mge+' --data hepd '
         if args.day:
             cmd += '--day '+str(args.day)
         if args.submit:

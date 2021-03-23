@@ -15,7 +15,7 @@ r.gStyle.SetPadTopMargin(0.05);
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
-parser.add_argument('--data', type=str, choices=['hepd','hepp'], required=True, help='Define patht to data file.')
+parser.add_argument('--data', type=str, choices=['hepd','hepp_l','hepp_h'], required=True, help='Define patht to data file.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 parser.add_argument('--threshold', type=int, default=100, help='Pick a number as minimum statistic in histograms.')
 parser.add_argument('--drawHistos', action='store_true', help='Tell if histograms should be drawn.')
@@ -34,9 +34,13 @@ numPbin, Pbins = getPitchBins()
 threshold = args.threshold
 debug = args.debug
 hepd = (args.data == 'hepd')
-hepp = (args.data == 'hepp')
+hepp_l = (args.data == 'hepp_l')
+hepp_h = (args.data == 'hepp_h')
+rebin = False
+if hepp_l or hepp_h:
+    rebin=True
 
-print(len(Lbins[0:numLbin]), Lbins[0:numLbin])
+print(len(Lbins[0:numLbin-1]), Lbins[0:numLbin-1])
 print(len(Pbins[0:numPbin-1]), Pbins[0:numPbin-1])
 
 colors = [920, 843, 416, 600, 616, 432, 900, 800, 1,
@@ -170,7 +174,7 @@ def getParallelMeans(strHist):
 
                   # write mean etc. into txt file
                   with open(strHist[6], 'a') as txtFile:
-                        line = strHist[5]+'{} {:.5f} {:.6f} {:.5f} {:.6f} {:.1f} {} {:.3f}\n'.format(hist.GetEntries(), mean, meanErr, rms, rmsErr, chi2, int(converged==True), geo)
+                        line = strHist[5]+'{} {:.8f} {:.8f} {:.8f} {:.8f} {:.1f} {} {:.3f}\n'.format(hist.GetEntries(), mean, meanErr, rms, rmsErr, chi2, int(converged==True), geo)
                         txtFile.writelines(line)
                   # prepare the histogram for drawing and add to list
                   hist.SetName(strHist[4]) 
@@ -190,7 +194,7 @@ print("To test days: ", lst)
 
 en_bins, energies, en_max = 1, [0.], 0.
 if args.integrateEn==False:
-    en_bins, energies, en_max = getEnergyBins(hepd, hepp)
+    en_bins, energies, en_max = getEnergyBins(args.data, rebin)
     print(energies)
     # test if pre-defined energy values are the same as in the root tree
     # important for the energy selection!
@@ -227,8 +231,8 @@ for d in lst:
       # list of histograms filled in parallel
       th1ds = Manager().list() 
       # stacks and legends to be used for the --drawHistos option
-      thstacks = [[r.THStack()] * len(Lbins[0:numLbin]) for x in range(len(energies))]
-      tlegends = [[r.TLegend()] * len(Lbins[0:numLbin]) for x in range(len(energies))]
+      thstacks = [[r.THStack()] * len(Lbins[0:numLbin-1]) for x in range(len(energies))]
+      tlegends = [[r.TLegend()] * len(Lbins[0:numLbin-1]) for x in range(len(energies))]
       # write averages for all L-p cells / day 
       outFileName = outFilePath+str(d)+'_min_'+str(threshold)+'ev.txt'
       # get average geomagnetic index of this day
@@ -249,7 +253,7 @@ for d in lst:
                   # hepp data experience much higher flux values in lowest energy bin
                   # but this will not be taken into account in the number of bins of the histogram
                   binWidth = 10
-            for iL,L in enumerate(Lbins[0:numLbin]):
+            for iL,L in enumerate(Lbins[0:numLbin-1]):
                   tlegends[ien][iL] = r.TLegend(0.6,0.5,0.9,.9, 'threshold = '+str(threshold)+' entries')
                   thstacks[ien][iL] = r.THStack('stack_'+str(en)+'_'+str(L), 'stack_'+str(en)+'_'+str(L)) 
 
@@ -294,7 +298,7 @@ for d in lst:
             print('legend L entries: ',len(tlegends[0]))
 
             for iest in range(len(energies)):
-                  for ifinal in range(len(Lbins[0:numLbin])):
+                  for ifinal in range(len(Lbins[0:numLbin-1])):
                         st = thstacks[iest][ifinal]
                         # draw stack, only if contains histograms (entries>threshold)
                         if not st.GetNhists()>0:

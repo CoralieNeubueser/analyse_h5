@@ -13,9 +13,9 @@ r.gStyle.SetPadRightMargin(0.2)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
-parser.add_argument('--data', type=str, choices=['hepd','hepp'], required=True, help='Define patht to data file.')
+parser.add_argument('--data', type=str, choices=['hepd','hepp_l','hepp_h'], required=True, help='Define patht to data file.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
-parser.add_argument('--useVersion', type=str, default='v2', help='Define wether v1/ (no flux=0) or v2/ (all fluxes) is written.')
+parser.add_argument('--useVersion', type=str, default='v2.1', choices=['v1','v2','v2.1'], help='Define wether v1/ (no flux=0) or v2/ (all fluxes), or v2.1/ (all fluxes, summed over energy) is written.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 args,_=parser.parse_known_args()
 
@@ -39,16 +39,20 @@ for dset in traverse_datasets(f):
         print(dset, f[dset].shape, f[dset].dtype)
     
 parameters = dict([('hepd', ['L_parameter', 'HEPD_ele_energy_table', 'HEPD_ele_pitch_table', 'HEPD_ele_energy_pitch', 'UTCTime', 'HEPD_ele_counts','B']),
-                   #('hepp', ['L_parameter', 'Energy_Table_Electron', 'PitchAngle', 'A411', 'UTC_TIME', 'Count_Electron', 'CyclotronFrequency_Electron'])
-                   ('hepp', ['L_parameter', 'electron_energy_table', 'PitchAngle', 'electron_energyPitchAngleSpectrum', 'UTCTime', 'electron_counts', 'electron_gyrofrequency'])
+                   ('hepp_l', ['L_parameter', 'Energy_Table_Electron', 'PitchAngle', 'A411', 'UTC_TIME', 'Count_Electron', 'CyclotronFrequency_Electron']),
+                   #('hepp', ['L_parameter', 'electron_energy_table', 'PitchAngle', 'electron_energyPitchAngleSpectrum', 'UTCTime', 'electron_counts', 'electron_gyrofrequency'])
+                   ('hepp_h', ['L_parameter', 'Energy_Table_Electron', 'PitchAngle', 'A411', 'UTC_TIME', 'Count_Electron', 'CyclotronFrequency_Electron'])
+
                ])
 lonlat = dict([('hepd', ['LonLat', 'LonLat'] ),
-               ('hepp', ['LonLat', 'LonLat'] )
-               #('hepp', ['GEO_LON', 'GEO_LAT'] )
+               #('hepp', ['LonLat', 'LonLat'] )
+               ('hepp_l', ['GEO_LON', 'GEO_LAT'] ),
+               ('hepp_h', ['GEO_LON', 'GEO_LAT'] )
            ])
 gmlonlat = dict([('hepd', ['GMLonLat', 'GMLonLat'] ),
-                 ('hepp', ['GMLonLat', 'GMLonLat'] )
-                 #('hepp', ['MAG_LON', 'MAG_LAT'] )
+                 #('hepp', ['GMLonLat', 'GMLonLat'] )
+                 ('hepp_l', ['MAG_LON', 'MAG_LAT'] ),
+                 ('hepp_h', ['MAG_LON', 'MAG_LAT'] ),
              ])
 
 ### data format of HEPP_august_2018: HEPP_L
@@ -74,7 +78,7 @@ time_blanc_min = dset_time[maxEv-1]
 
 ### prepare
 # define expected energy bins, fill for hepd as default
-energy_bins, energyTab, energyMax = getEnergyBins(True, False)
+energy_bins, energyTab, energyMax = getEnergyBins(args.data, False)
 # L bins
 l_bins, l_x_bins = getLbins()
 # pitch bins
@@ -82,13 +86,14 @@ p_bins, p_x_bins = getPitchBins()
 # earth radius at equator in km
 RE = 6378.137 
 
-if args.data=='hepp':
+if args.data=='hepp_l' or args.data=='hepp_h':
     hepp = True
     head, tail = os.path.split(filename)
+    # CSES_01_HEP_1_L02_A4_069070_20190502_144452_20190502_152151_000
     times = re.findall('\d+', tail)
-    time_blanc = int(str(times[1]+times[2])) #str(dset_time[0])
-    time_blanc_min = int(str(times[3]+times[4])) #dset_time[maxEv-1][0]
-    energy_bins, energyTab, energyMax = getEnergyBins(False, True)
+    time_blanc = int(str(times[5]+times[6]))  #int(str(times[1]+times[2])) #str(dset_time[0])
+    time_blanc_min = str(times[7]+times[8]) #int(str(times[3]+times[4])) #dset_time[maxEv-1][0]
+    energy_bins, energyTab, energyMax = getEnergyBins(args.data, True)
 
 time_min = int(str(time_blanc)[-6:-4])*60*60 +  int(str(time_blanc)[-4:-2])*60 +  int(str(time_blanc)[-2:])
 
@@ -152,24 +157,29 @@ tree.Branch( 'field', B, 'field/F' )
 tree.Branch( 'field_eq', B_eq, 'field_eq/F' )
 
 # define the L-pitch map
-energyBins = getEnergyBins(True, False)
-if args.data=='hepp':
-    energyBins = getEnergyBins(False, True)
+energyBins = getEnergyBins(args.data, False)
+if args.data=='hepp_l' or args.data=='hepp_h':
+    energyBins = getEnergyBins(args.data, True)
 
 vecCells = {} 
 for cell_l in range(0,len(l_x_bins)-1):
     for cell_p in range(0,len(p_x_bins)-1):
         vecCells[cell_l,cell_p] = r.std.vector(float)()
         tree.Branch( 'flux_'+str(l_x_bins[cell_l])+'_'+str(p_x_bins[cell_p]), vecCells[cell_l,cell_p]) 
-vecCellsEn = {} 
-for cell_l in range(0,len(l_x_bins)-1):
-    for cell_p in range(0,len(p_x_bins)-1):
-        vecCellsEn[cell_l,cell_p] = r.std.vector(float)()
-        tree.Branch( 'energy_'+str(l_x_bins[cell_l])+'_'+str(p_x_bins[cell_p]), vecCellsEn[cell_l,cell_p])
+# not needed when summed over energy
+if version!='v2.1':
+    vecCellsEn = {} 
+    for cell_l in range(0,len(l_x_bins)-1):
+        for cell_p in range(0,len(p_x_bins)-1):
+            vecCellsEn[cell_l,cell_p] = r.std.vector(float)()
+            tree.Branch( 'energy_'+str(l_x_bins[cell_l])+'_'+str(p_x_bins[cell_p]), vecCellsEn[cell_l,cell_p])
 
 
 print("L-alpha map has {} cells.".format(len(vecCells)))
-
+#print("Pitches: [")
+#for i in range(0,36):
+#    print(str(dset_p[0][i])+', ')
+    
 # write 2d histograms
 hist2D_l_pitch=r.TH2D("hist2D_l_pitch","hist2D_l_pitch",l_bins,np.array(l_x_bins),len(dset_p[0]),0,180)
 hist2D_l_pitch_en=r.TH2D("hist2D_l_pitch_en","hist2D_l_pitch_en",l_bins,np.array(l_x_bins),len(dset_p[0]),0,180)
@@ -226,7 +236,7 @@ for iev,ev in enumerate(dset2):
             Lshell = dset1[iev]
             countInt += dset_count[iev]
                 
-        elif args.data=='hepp':
+        elif args.data=='hepp_l' or args.data=='hepp_h':
             # fill tree and histos for HEPP data 
             time_calc = time_min + iev #60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
             time_act = (time_calc-time_min)/60.
@@ -234,10 +244,10 @@ for iev,ev in enumerate(dset2):
             day = int(str(time_blanc)[-14:-6])
             year = int(str(time_blanc)[-14:-10])
 
-            lonInt = int(dset_lon[iev][0])
-            latInt = int(dset_lat[iev][1])
+            lonInt = int(dset_lon[iev][0]) #[0])
+            latInt = int(dset_lat[iev][0]) #[1])
             gmlonInt = int(dset_gmlon[iev][0])
-            gmlatInt = int(dset_gmlat[iev][1])
+            gmlatInt = int(dset_gmlat[iev][0]) #[1])
             # translate cyclotron frequency w=qe*B/(2pi*me) 1/s to B
             qe = 1.602176634e-19 # C = 1.602176634×10−19 As
             # 1Gs = e-4 T = e-4kg/(As2)
@@ -246,7 +256,7 @@ for iev,ev in enumerate(dset2):
             # translate in nT
             Bfield = dset_field[iev]*me/qe*2*np.pi*1e9
             BfieldSum += Bfield
-            Lshell = dset1[iev]
+            Lshell = dset1[iev][0]
             # sum over all channel counts per s
             for channel_count in dset_count[iev]:
                 countInt += channel_count
@@ -279,9 +289,13 @@ for iev,ev in enumerate(dset2):
         for ie,en in enumerate(ev):
             # loop through pitch
             for ip,flux in enumerate(en):
-
+                ip_orig = ip
                 if version == 'v1' and flux==0:
                     continue
+
+                # rebin the HEPP-L entries from 36 to 9
+                if args.data == 'hepp_h':
+                    ip = int(ip/4.)
 
                 # fill tree only for non-zero fluxes
                 # fill also 0s, decided 2020/10/26
@@ -293,20 +307,23 @@ for iev,ev in enumerate(dset2):
                 # HEPP data has stores counts per 9 different devices (merge all)                 
                 # fill energy-flux vector (summ over fluxes over all pitches) 
                 if not hepd:
-                    countInt = dset_count[iev][ip]
+                    if args.data=='hepp_l':
+                        countInt = dset_count[iev][ip]
+                    else:
+                        countInt = dset_count[iev][0]
                     # rebin the energy range from 256 to 16
                     maxE = dset_en[0][255]
                     minE = dset_en[0][0]
                     binE = (maxE-minE)/16.
                     newbin = math.floor(ie/16.)
                     vec_en[newbin] += pow(flux,2)
-                    Pvalue = dset_p[0][ip]
+                    Pvalue = dset_p[0][ip_orig]
                     ie = newbin
 
                 else:
-                    Pvalue = (dset_p[0][ip]+dset_p[0][ip-1])/2.
+                    Pvalue = (dset_p[0][ip_orig]+dset_p[0][ip_orig-1])/2.
                     if ip==0:
-                        Pvalue = dset_p[0][ip]/2.
+                        Pvalue = dset_p[0][ip_orig]/2.
                     vec_en[ie] += pow(flux,2)
                 
                 # fill pitch-flux vector (summ over fluxes over all energies, normalise before to MeV, using the energy bin width)

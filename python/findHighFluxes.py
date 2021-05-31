@@ -11,7 +11,7 @@ r.gStyle.SetOptStat(0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.', required=True)
-parser.add_argument('--data', type=str, choices=['hepd','hepp_l','hepp_h'], help='Define input data.', required=True)
+parser.add_argument('--data', type=str, choices=['hepd','hepp_l_channel_narrow','hepp_l_channel_wide','hepp_h'], help='Define input data.', required=True)
 parser.add_argument('--thr', type=int, default=100, help='Define minimum statistics used.')
 parser.add_argument('--sigma', type=int, default=1, help='Define minimum sigma for flux values > <phi>+sigma*phi_rms.')
 parser.add_argument('--fitted', action='store_true', help='Use exponential fit tau value for threshold.')
@@ -26,18 +26,18 @@ filename = args.inputFile
 # get L/alpha bins
 # go in DeltaL=1. steps to increase stats
 l_bins, l_fine_bins = getLbins()
-l_bins, l_x_bins = getCorserLbins()
 numPbin, Pbins = getPitchBins()
 storedEn = []
-print(l_x_bins)
+print(l_fine_bins)
 print(Pbins)
 # retrieve energy bins for either hepd: True, hepp: False
-if args.data=='hepd':
-    en_bins, energies, en_max = getEnergyBins(args.data, False)
-    storedEn = energies
-else:
-    en_bins, energies, en_max = getEnergyBins(args.data, True)
-    storedEn = [round(en,1) for en in energies] 
+rebin=False
+if args.data=='hepp_l' or args.data=='hepp_h' or args.data=='hepp_l_channel_narrow' or args.data=='hepp_l_channel_wide':
+    rebin=True
+det=args.data
+if 'hepp_l' in args.data:
+    det='hepp_l'
+en_bins, energies, en_max = getEnergyBins(det, rebin)
 
 hist2D = []
 hist2D_en = []
@@ -58,9 +58,11 @@ for ev in inRoot.tree:
       else:
             break
 test_energies = sorted(test_energies, key=float)
-#if energies!=test_energies:
-#    energies=test_energies
+if energies!=test_energies:
+    energies=test_energies
 print("Energy bins: ", energies)
+storedEn = [round(en,1) for en in energies]
+print(storedEn)
 
 # output tree
 outfilename = filename.replace('all','all_highFluxes')
@@ -78,7 +80,7 @@ Longitude = array('i', [0])
 Latitude = array('i', [0])
 Longitude_geom = array('i', [0])
 Latitude_geom = array('i', [0])
-Lshell = array('i', [0])
+Lshell = array('f', [0.])
 Alpha_eq = array('f', [0.])
 Energy = array('f', [0.])
 GeomInd = array('i', [0])
@@ -92,7 +94,7 @@ out_tree.Branch( 'lon', Longitude, 'lon/I' )
 out_tree.Branch( 'lat', Latitude, 'lat/I' )
 out_tree.Branch( 'geom_lon', Longitude_geom, 'geom_lon/I' )
 out_tree.Branch( 'geom_lat', Latitude_geom, 'geom_lat/I' )
-out_tree.Branch( 'L', Lshell, 'L/I' )
+out_tree.Branch( 'L', Lshell, 'L/F' )
 out_tree.Branch( 'alpha', Alpha_eq, 'alpha/F' )
 out_tree.Branch( 'energy', Energy, 'energy/F' )
 out_tree.Branch( 'geomIndex', GeomInd, 'geomIndex/I' )
@@ -112,8 +114,8 @@ dataDict = readGeomIndex()
 for day in days:
     
     # prepare histograms
-    hist2D = [ r.TH2D('hist2D_flux_'+str(day)+'_'+str(en)+'MeV', 'hist2D_flux_'+str(day)+'_'+str(en)+'MeV', l_bins, np.array(l_x_bins), numPbin-1, np.array(Pbins,dtype=float)) for en in energies]
-    hist2D_en = [ r.TH2D('hist2D_flux_en_'+str(day)+'_'+str(en)+'MeV', 'hist2D_flux_en_'+str(day)+'_'+str(en)+'MeV', l_bins, np.array(l_x_bins), numPbin-1, np.array(Pbins,dtype=float)) for en in energies]
+    hist2D = [ r.TH2D('hist2D_flux_'+str(day)+'_'+str(en)+'MeV', 'hist2D_flux_'+str(day)+'_'+str(en)+'MeV', l_bins, np.array(l_fine_bins), numPbin-1, np.array(Pbins,dtype=float)) for en in energies]
+    hist2D_en = [ r.TH2D('hist2D_flux_en_'+str(day)+'_'+str(en)+'MeV', 'hist2D_flux_en_'+str(day)+'_'+str(en)+'MeV', l_bins, np.array(l_fine_bins), numPbin-1, np.array(Pbins,dtype=float)) for en in energies]
     hist2D_loc = [ r.TH2D('hist2D_loc_flux_'+str(day)+'_'+str(en)+'MeV', 'hist2D_loc_flux_'+str(day)+'_'+str(en)+'MeV', 180, -180,180, 90,-90,90) for en in energies]
     hist2D_time = [ r.TH2D('hist2D_time_flux_'+str(day)+'_'+str(en)+'MeV', 'hist2D_time_flux_'+str(day)+'_'+str(en)+'MeV', (60*24), 0, 24, 100, 0, 0.1) for en in energies]
     av_Lalpha = [ {} for en in energies]
@@ -171,6 +173,8 @@ for day in days:
             # match energy to energy bin
             energyStored = energy[ia]
             energy_bin = test_energies.index( energyStored )
+            # get inverse geometrical factor
+            invGeomFactor = getInverseGeomFactor(args.data, energy_bin)
 
             # test if keys exist in dict of estimated RMS99/taus
             if (L_binValue, alpha_binValue) in av_Lalpha[energy_bin]:
@@ -216,11 +220,11 @@ for day in days:
                     # fill output tree
                     Ev[0] = count
                     Flux[0] = flux[ia]
-                    if rmsErr!=0:
+                    if invGeomFactor!=0:
                         # define signal as #counts, rmsErr is half-width of flux distributions
-                        Signal[0] = flux[ia]/(2.*rmsErr)
+                        Signal[0] = flux[ia]/invGeomFactor
                     else:
-                        Signal[0] = 1.
+                        Signal[0] = flux[ia]
                     Day[0] = day
                     Time[0] = storedTime # daily hours
                     Longitude[0] = ev.Long
@@ -229,8 +233,8 @@ for day in days:
                     Latitude_geom[0] = ev.geomLat
       
                     # write in L bins
-                    binned_L = l_x_bins[l_x_bins.index(math.floor(L))]
-                    Lshell[0] = int(binned_L)
+                    # use fine L bins
+                    Lshell[0] = L_binValue
                     # write in alpha bins
                     binned_alpha = Pbins[alpha_bin]
                     Alpha_eq[0] = binned_alpha
@@ -287,19 +291,19 @@ means = {}
 # loop through high flux tree
 vecCells = defaultdict(list)
 failedFits = 0
-fit_summary = [ r.TH2D('hist2D_'+str(day)+'_fit_summary', 'hist2D_'+str(day)+'_fit_summary', l_bins, np.array(l_x_bins), numPbin-1, np.array(Pbins,dtype=float)) for day in days ] 
+fit_summary = [ r.TH2D('hist2D_'+str(day)+'_fit_summary', 'hist2D_'+str(day)+'_fit_summary', l_bins, np.array(l_fine_bins), numPbin-1, np.array(Pbins,dtype=float)) for day in days ] 
 # fill high fluxes in dict that is used to fill histgram that are fit
 for h in t3:
     alpha_index = Pbins.index(h.alpha)
     if h.alpha>80:
         alpha_index = Pbins.index(abs(h.alpha-160))
-    vecCells[h.day, l_x_bins.index(math.floor(h.L)), alpha_index].append(h.counts)
+    vecCells[h.day, l_fine_bins.index(round(h.L,1)), alpha_index].append(h.counts)
 
 for key,value in vecCells.items():
     # key[0]=day, key[1]=L, key[2]=alpha
     # value=[counts] to fit
     # add histogram per day of counts with maximum counts 
-    hist1D_counts = r.TH1D('hist1D_counts_'+str(key[0])+'_'+str(l_x_bins[key[1]])+'_'+str(Pbins[key[2]]), 'hist1D_counts_'+str(key[0])+'_'+str(l_x_bins[key[1]])+'_'+str(Pbins[key[2]]), int(maxCounts), 0, maxCounts) 
+    hist1D_counts = r.TH1D('hist1D_counts_'+str(key[0])+'_'+str(l_fine_bins[key[1]])+'_'+str(Pbins[key[2]]), 'hist1D_counts_'+str(key[0])+'_'+str(l_fine_bins[key[1]])+'_'+str(Pbins[key[2]]), int(maxCounts), 0, maxCounts) 
     # fill histrogram
     for val in value:
         hist1D_counts.Fill(val)
@@ -314,7 +318,7 @@ for key,value in vecCells.items():
     # fit exponential
     f1 = r.TF1("f1_"+str(key[0])+'_'+str(key[1])+'_'+str(key[2]),"[0]*exp(-x/[1])",hist1D_counts.GetBinCenter(maxbin),hist1D_counts.GetBinCenter(lastbin))
     f1.SetParameters(hist1D_counts.GetEntries(),hist1D_counts.GetRMS())
-    f1.SetParLimits(1, 1e-5,50)
+    f1.SetParLimits(1, 1e-5,maxCounts)
     # first fitting in maximum range
     fresults = hist1D_counts.Fit(f1,"RSQ")
     mean = hist1D_counts.GetMean()
@@ -350,11 +354,11 @@ for key,value in vecCells.items():
                     failed = False
                     useFirst = False
             trial+=1
-        #        if args.debug:
+
         print('Finished after {} trials.'.format(trial))
-        if not failed and not useFirst:
-            # add last fit with optimised fit range
-            fresults = hist1D_counts.Fit(f1,"SQ","",hist1D_counts.GetBinCenter(fitstart),lastbin)
+    if not failed and not useFirst:
+        # add last fit with optimised fit range
+        fresults = hist1D_counts.Fit(f1,"SQ","",hist1D_counts.GetBinCenter(fitstart),hist1D_counts.GetBinCenter(lastbin))
 
     if not failed:
         tau = fresults.GetParams()[1]
@@ -365,12 +369,12 @@ for key,value in vecCells.items():
         # if the fit did not converge with good chi2, remove from the histogram
         hist1D_counts.RecursiveRemove( hist1D_counts.FindObject("f1_"+str(key[0])+'_'+str(key[1])+'_'+str(key[2])) )
 
-    f.WriteObject(hist1D_counts,"hist1D_counts_"+str(key[0])+'_'+str(l_x_bins[key[1]])+'_'+str(Pbins[key[2]]),'kOverwrite')
+    f.WriteObject(hist1D_counts,"hist1D_counts_"+str(key[0])+'_'+str(l_fine_bins[key[1]])+'_'+str(Pbins[key[2]]),'kOverwrite')
     taus[key]=tau
     means[key]=mean
-    fit_summary[list(days).index(key[0])].Fill(l_x_bins[key[1]], Pbins[key[2]], tau)
+    fit_summary[list(days).index(key[0])].Fill(l_fine_bins[key[1]], Pbins[key[2]], tau)
     if key[2]!=4:
-        fit_summary[list(days).index(key[0])].Fill(l_x_bins[key[1]], Pbins[8-key[2]], tau)
+        fit_summary[list(days).index(key[0])].Fill(l_fine_bins[key[1]], Pbins[8-key[2]], tau)
 
 for iday,hist in enumerate(fit_summary):
     prep2D(hist, 'L shell', '#alpha_eq [deg]', '#tau', False)
@@ -379,7 +383,7 @@ vecCells.clear()
 
 # use tau to determine significance
 for h in t3:
-    iL=l_x_bins.index(math.floor(h.L))
+    iL=l_fine_bins.index(round(h.L,1))
     iP = Pbins.index(h.alpha)
     if h.alpha>80:
         iP = Pbins.index(abs(h.alpha-160))

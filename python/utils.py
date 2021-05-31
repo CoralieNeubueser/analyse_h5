@@ -116,7 +116,10 @@ def getEnergyBins(det, rebinned):
                      2.76117659, 2.77254891, 2.78392148, 2.79529405, 2.80666661, 2.81803918,
                      2.82941175, 2.84078431, 2.85215688, 2.86352944, 2.87490201, 2.88627458,
                      2.89764714, 2.90901971, 2.92039227, 2.9317646 , 2.94313717, 2.95450974,
-                     2.9658823 , 2.97725487, 2.98862743, 3.        ], 3.
+                     2.9658823 , 2.97725487, 2.98862743, 3. ], 3.
+    elif det=='hepp_h' and rebinned:
+        return 16, [ 1.0, 4.388239860534668, 7.776480197906494, 11.164719581604004, 14.552960395812988, 17.941200256347656, 21.329439163208008, 24.717679977416992, 28.105920791625977, 31.494159698486328, 34.88240051269531, 38.2706413269043, 41.658878326416016, 45.047119140625, 48.435359954833984, 51.82360076904297 ], 55.0
+    
     elif det=='hepp_h' and not rebinned:
         return 256, [1.0, 
                      1.2117650508880615, 
@@ -372,9 +375,8 @@ def getEnergyBins(det, rebinned):
                      54.15301513671875, 
                      54.36478042602539, 
                      54.57654571533203, 
-                     54.78831100463867], 55.0
-    elif det=='hepp_h' and rebinned:
-        return 16, [ 1.0, 4.388239860534668, 7.776480197906494, 11.164719581604004, 14.552960395812988, 17.941200256347656, 21.329439163208008, 24.717679977416992, 28.105920791625977, 31.494159698486328, 34.88240051269531, 38.2706413269043, 41.658878326416016, 45.047119140625, 48.435359954833984, 51.82360076904297 ], 55.0
+                     54.78831100463867,
+                     55.0], 55.0
 
 # returns the geometrical correction factor for hepd data, per energy bin
 def getGeomCorr(hepd, energyBin):
@@ -388,21 +390,55 @@ def getGeomCorr(hepd, energyBin):
 
 # for HEPD data
 # returns the 'new' geometrical factor based on MC for Edep, per energy bin  
-def getGeomFactor(energyBin):
-    # geometrical factors
-    ele_corr_GF = [ 131.128, 545.639, 560.297, 530.937, 477.827, 413.133, 334.176, 252.3, 204.52, 103.216, 77.5552, 61.1536 ]
+def getGeomFactor(det,energyBin):
+    if det=='hepd':
+        # geometrical factors
+        ele_corr_GF = [ 131.128, 545.639, 560.297, 530.937, 477.827, 413.133, 334.176, 252.3, 204.52, 103.216, 77.5552, 61.1536 ]
+        #ele_corr_GF = 12*[0.]
+    elif det=='hepp_l_channel_narrow':
+        ele_corr_GF = 16*[0.12] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+    elif det=='hepp_l_channel_wide':
+        ele_corr_GF = 16*[0.73] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+    elif det=='hepp_h':
+        ele_corr_GF = 16*[0.] 
+
     return ele_corr_GF[energyBin]
 
+def getInverseGeomFactor(det,energyBin):
+    if det=='hepd':
+        # reverse correction, and use original factor
+        ele_GF = [ 0.76, 188.26, 326.64, 339.65, 344.99, 331.83, 304.73, 263.56, 217.33, 169.48, 117.31, 71.45 ]
+        return getGeomCorr(det,energyBin) / ele_GF[energyBin]
+    elif det=='hepp_l_channel_narrow':
+        ele_corr_GF = 16*[0.12]
+        return 1./ele_corr_GF[energyBin]
+    elif det=='hepp_l_channel_wide':
+        ele_corr_GF = 16*[0.73]
+        return 1./ele_corr_GF[energyBin]
+    else:
+        return 0.
+
 # returns the energy bin width, used to normalise fluxes to counts/s/cm2/sr/MeV 
-def getEnergyBinWidth(hepd, energyBin):
+def getEnergyBinWidth(det, energyBin):
     enBorder=np.array([0.5, 4., 8.96811, 10.9642,  13.4045,  16.388,   20.0355,  24.4949,  29.9468,  36.6122,  44.7611,  54.7237,  66.9037 ])
     # HEPP-L fluxes need normalisation to 11keV
-    if not hepd:
+    if det=='hepp_l':
         #enBorder=np.array([0.1, 0.28125, 0.4625, 0.64375, 0.825, 1.00625, 1.1875, 1.36875, 1.55, 1.73125, 1.9125, 2.09375, 2.275, 2.45625, 2.6375, 2.81875, 3.0])
         #enBorder=np.array(16*[0.011])
-        return 16*0.011 
+        return 0.11 
+    elif det=='hepp_h':
+        return 0.21
     else:
         return enBorder[energyBin+1]-enBorder[energyBin]
+
+# return number and maximum of flux bins to be used in determining the averages and RMS99
+def getFluxBins(det):
+    if det=='hepd':
+        return 50, 0.01
+    elif det=='hepp_l':
+        return 1000, 10
+    else:
+        return 1000, 0.05
 
 # return a list of days
 def getDays(tree):
@@ -643,8 +679,12 @@ def SubmitListToCondor(args, irun=1):
 
 ## read in geomagnetic indices
 def readGeomIndex():
-
+    ###
     dataPath = sharedOutPath()+"/data/geomIndices/BDR_SymH_AE_Indices_merged2018and2019_FlagV4b_All.txt"
+    if open(dataPath, "r"):
+        print('Reading IGRF12 magnetic field values from: ', dataPath)
+    else:
+        print('ERROR.. could not find txt files for magnetic field values..')
     file = open(dataPath, "r")
     next(file)
     lines = file.readlines()[20:]
@@ -656,8 +696,22 @@ def readGeomIndex():
 
     return newDict
 
+## read txt files with magetic field strenght for 500km altitude, from IGRF12 model
+## day in yyyymmdd
+def readIGRF(day):
+    dataPath = sharedOutPath()+"/data/geomField/"+str(day)+'_field.txt'
+    file = open(dataPath,'r')
+    next(file)
+    lines = file.readlines()
+    newDict={}
+    for line in lines:
+        d, lat, lon, mag = line.strip().split(' ')
+        pair = (int(d.replace('-','')), int(lat), int(lon))
+        newDict[pair] = float(mag)
+    return newDict
+
 def getGeomIndex(dic, day):
-    
+    ###
     allGeomIndices = []
     for line in dic:
         if line[0] == day:
@@ -666,7 +720,7 @@ def getGeomIndex(dic, day):
     return np.mean(np.array(allGeomIndices))
 
 def getAlphaLindex(alpha_v, L_v):
-    # find corresponding L/alpha bin, and use the average Lshell and alpha values                                                                                                              
+    # find corresponding L/alpha bin, and use the average Lshell and alpha values                                                  
     Lbin=-1
     Albin=-1
     for il in range(getLbins()[0]):

@@ -42,6 +42,7 @@ for dset in traverse_datasets(f):
     
 parameters = dict([('hepd', ['L_parameter', 'HEPD_ele_energy_table', 'HEPD_ele_pitch_table', 'HEPD_ele_energy_pitch', 'UTCTime', 'HEPD_ele_counts','B']),
                    ('hepp_l', ['L_parameter', 'Energy_Table_Electron', 'PitchAngle', 'A411', 'UTC_TIME', 'Count_Electron', 'CyclotronFrequency_Electron']),
+                   #('hepp_l', ['HEPP-Lparameter', 'Energy_Table_Electron', 'PitchAngle', 'A411', 'UTC_TIME', 'Count_electron', 'Count_electron']),
                    #('hepp', ['L_parameter', 'electron_energy_table', 'PitchAngle', 'electron_energyPitchAngleSpectrum', 'UTCTime', 'electron_counts', 'electron_gyrofrequency'])
                    ('hepp_h', ['L_parameter', 'Energy_Table_Electron', 'PitchAngle', 'A411', 'UTC_TIME', 'Count_Electron', 'CyclotronFrequency_Electron'])
 
@@ -123,6 +124,8 @@ else:
         outRootName = sharedOutPath()+"/data/root/"+version+"/"+args.data+"/originalEnergyBins/"+rootName
     if integral!=1:
         outRootName = sharedOutPath()+"/data/root/"+version+"/"+args.data+"/"+str(args.integral)+"s/"+rootName
+        if args.data=='hepp_l':
+            outRootName = sharedOutPath()+"/data/root/"+version+"/"+args.data+"_channel_"+args.channel+"/"+str(args.integral)+"s/"+rootName
 
 print("Writing output into root file: ", outRootName)
 outRoot = r.TFile( outRootName , 'recreate' )
@@ -146,8 +149,10 @@ geomLa = array( 'i', [ 0 ] )
 B = array( 'f', [ 0. ] )
 B_eq = array( 'f', [ 0. ] )
 Ev = array( 'i', [ 0 ] )
+Ch_vec = r.std.vector(int)()
 
 tree.Branch( 'event', Ev, 'event/I' )
+tree.Branch( 'channel', Ch_vec)
 tree.Branch( 'L', L, 'L/F' )
 tree.Branch( 'pitch', P_vec)
 tree.Branch( 'alpha', A_vec)
@@ -203,7 +208,9 @@ vec_pt = r.std.vector(float)(9)
 vec_nPt = r.std.vector(int)(9)
 vecSum = defaultdict(dict)
 vecAlphaL = defaultdict(dict)
-countInt = int(0)
+vecPitch = defaultdict(dict)
+vecChannel = defaultdict(dict)
+
 countFlux = int(0)
 
 # use energy bins as defined in h5 table
@@ -224,6 +231,7 @@ for iev,ev in enumerate(dset2):
     day = int(0)
     daytime = float(0.)
     Beq = float(0.)
+    countInt = int(0)
 
     if (math.floor(float(iev)/float(integral)) < countEv):
         countIntSec += 1
@@ -244,7 +252,7 @@ for iev,ev in enumerate(dset2):
             Bfield = dset_field[iev]
             BfieldSum += Bfield
             Lshell = dset1[iev]
-            countInt += dset_count[iev]
+            countInt = dset_count[iev]
                 
         elif args.data=='hepp_l' or args.data=='hepp_h':
             # fill tree and histos for HEPP data 
@@ -261,9 +269,6 @@ for iev,ev in enumerate(dset2):
             Bfield = fieldMap[(int(times[5]), latInt, lonInt)]
             BfieldSum += Bfield
             Lshell = dset1[iev][0]
-            # sum over all channel counts per s
-            for channel_count in dset_count[iev]:
-                countInt += channel_count
 
         # get B field strength at the equator
         Beq = getBeq(Lshell) 
@@ -279,7 +284,7 @@ for iev,ev in enumerate(dset2):
 
         BeqSum += Beq
         
-        if iev==1 and args.debug:
+        if iev<5 and args.debug:
             print("Day:                    ", day)
             print("B field [nT]:           ", Bfield)
             print("L-value:                ", Lshell)
@@ -287,7 +292,8 @@ for iev,ev in enumerate(dset2):
             print("GMLON/GMLAT:            ", gmlonInt, gmlatInt)
             print("Beq [nT]:               ", round(Beq,2))
             print("Count:   ", countInt)
-    
+            if iev==4:
+                break
     
         # loop through energy bins
         for ie,en in enumerate(ev):
@@ -301,7 +307,7 @@ for iev,ev in enumerate(dset2):
                 # select pitch angles correspnding to narrow/wide HEPP-L channels
                 if args.data=='hepp_l':
                     if ip&1 and args.channel=='narrow':
-                        # ungerade: wide opening angle                                                                                                                                                                            
+                        # ungerade: wide opening angle                                                                                                                                            
                         continue
                     elif not ip&1 and args.channel=='wide':
                         # gerade: narrow opening angle
@@ -318,15 +324,13 @@ for iev,ev in enumerate(dset2):
 
                 vec_nPt[ip_new] += 1
             
-                # HEPP-L data has stores counts per 9 different devices
+                # HEPP-L data stores counts per 9 different devices
                 # select either narrow/wide channels by local pitch angle
                 # fill energy-flux vector (summ over fluxes over all pitches) 
                 if not hepd:
-                    if args.data=='hepp_l':
-                        countInt = dset_count[iev][ip]
-                        Pvalue = (dset_p[iev][ip]+dset_p[iev][ip-1])/2.
-                        if ip==0:
-                            Pvalue = dset_p[0][ip]/2.
+                    if args.data=='hepp_l': # and int(str(times[5])[0:4]) > 201812:
+                        countInt += dset_count[iev][ip]
+                        Pvalue = dset_p[iev][ip]
                     else:
                         countInt = dset_count[iev][0]
                         Pvalue = (dset_p[0][ip]+dset_p[0][ip-1])/2.
@@ -344,20 +348,31 @@ for iev,ev in enumerate(dset2):
                         Pvalue = dset_p[0][ip]/2.
                     vec_en[ie_new] += pow(flux,2)
                 
+                if math.isnan(Pvalue):
+                    print('Local pitch angle not stored.. continue.')
+                    continue
+
                 # fill pitch-flux vector (summ over fluxes over all energies, normalise before to MeV, using the energy bin width)
                 vec_pt[ip_new] += pow(float(flux/getEnergyBinWidth(args.data, ie_new)),2)
                 # calculate equatorial pitch angle
                 alpha_eq = getAlpha_eq( Pvalue, Bfield, Beq )
+                # channel is 0 for HEPD and HEPP 
+                channel = 0
+                if args.data=='hepp_l':
+                    channel = ip
                 # fill Energy-local pitch matrix
                 # store corresponding L/alpha values
                 if (ie_new,ip_new) in vecSum:
                     vecSum[(ie_new,ip_new)] += flux
-                    vecAlphaL[(ie_new,ip_new)] = [vecAlphaL[(ie_new,ip_new)][0]+alpha_eq, vecAlphaL[(ie_new,ip_new)][1]+round(Lshell,1), vecAlphaL[(ie_new,ip_new)][2]+1.]
+                    vecAlphaL[(ie_new,ip_new)] = [vecAlphaL[(ie_new,ip_new)][0]+alpha_eq, round(vecAlphaL[(ie_new,ip_new)][1]+Lshell,1), vecAlphaL[(ie_new,ip_new)][2]+1.]
+                    vecPitch[(ie_new,ip_new)] += Pvalue
                 else:
                     vecSum[(ie_new,ip_new)] = flux
                     vecAlphaL[(ie_new,ip_new)] = [alpha_eq, round(Lshell,1), 1.]
+                    vecPitch[(ie_new,ip_new)] = Pvalue
+                    vecChannel[(ie_new,ip_new)] = channel
 
-                if iev==1 and args.debug:
+                if iev<5 and args.debug:
                     print("--- Energy bin:      ", ie_new)
                     print("--- Energy:          ", energiesRounded[ie_new])
                     print("--- Orig. energy bin:", ie)
@@ -392,7 +407,9 @@ for iev,ev in enumerate(dset2):
                 Albin=ia
                 break
         if Lbin==-1 or Albin==-1:
-            print(vecAlphaL[cell][1]/vecAlphaL[cell][2])
+            print('Alpha: ',vecAlphaL[cell][0]/vecAlphaL[cell][2])
+            print('L:     ',vecAlphaL[cell][1]/vecAlphaL[cell][2])
+
         vecCells[Lbin,Albin].push_back(value / countIntSec)
         vecCellsEn[Lbin,Albin].push_back( energiesRounded[cell[0]] )
                     
@@ -424,8 +441,9 @@ for iev,ev in enumerate(dset2):
     for (key, value) in vecSum.items():
         F_vecvec.push_back(value / float(countIntSec))
         E_vec.push_back(energiesRounded[key[0]])
-        P_vec.push_back(p_x_bins[key[1]])
-        A_vec.push_back(vecAlphaL[key][0]/vecAlphaL[key][2])
+        P_vec.push_back(int(vecPitch[key] / float(vecAlphaL[key][2]))) # normalise if 2 pitch angles ended up in same alpha cell /s
+        A_vec.push_back(vecAlphaL[key][0]/vecAlphaL[key][2]) # normalise if 2 pitch angles ended up in same alpha cell /s
+        Ch_vec.push_back(vecChannel[key])
         if value!=0:
             countFlux+=1
 
@@ -448,9 +466,13 @@ for iev,ev in enumerate(dset2):
     tree.Fill()
     # clean-up
     vecSum.clear()
+    vecPitch.clear()
+    vecAlphaL.clear()
+    vecChannel.clear()
     E_vec.clear()
     P_vec.clear()
     A_vec.clear()
+    Ch_vec.clear()
     F_vec_en.clear()
     vec_en.clear()
     vec_pt.clear()

@@ -283,7 +283,8 @@ for d in lst:
                         if args.integrateEn:
                             lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'('+str(flux_bins)+',0,'+str(flux_bins*flux_binWidth)+')'), 'field>25000 && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit, meanGeomIndex, geomFactor ]
                         else:
-                            lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'('+str(flux_bins)+',0,'+str(flux_bins*flux_binWidth)+')'), 'field>25000 && energy_'+str(L)+'_'+str(P)+'=='+str(en)+' && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit, meanGeomIndex, geomFactor ]
+                            lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)), 'field>25000 && energy_'+str(L)+'_'+str(P)+'=='+str(en)+' && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit, meanGeomIndex, geomFactor ]
+                            #lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'('+str(flux_bins)+',0,'+str(flux_bins*flux_binWidth)+')'), 'field>25000 && energy_'+str(L)+'_'+str(P)+'=='+str(en)+' && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit, meanGeomIndex, geomFactor ]
                         commands.append(lst_comm)
                         count += 1
 
@@ -331,6 +332,7 @@ for d in lst:
                               st.GetXaxis().SetTitle('flux [counts/(s#upoint cm^{2}#upoint sr)]')
                               st.GetYaxis().SetTitle('# entries')
                               st.SetMinimum(1)
+                              st.GetXaxis().SetLimits(0,500) #(st.GetHistogram().GetMean()+3*st.GetHistogram().GetRMS()))
                               tlegends[iest][ifinal].Draw()
                               can.Modified()
                               head, tail = os.path.split( filename.replace('root','pdf').replace('all', 'day_'+str(d)+'_energy_'+str(energies[iest])+'_L_'+str(Lbins[ifinal])) )

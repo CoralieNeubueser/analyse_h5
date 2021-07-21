@@ -35,8 +35,10 @@ rebin=False
 if args.data=='hepp_l' or args.data=='hepp_h' or args.data=='hepp_l_channel_narrow' or args.data=='hepp_l_channel_wide':
     rebin=True
 det=args.data
+maxFluxForHist=0.1
 if 'hepp_l' in args.data:
     det='hepp_l'
+    maxFluxForHist=1000000
 en_bins, energies, en_max = getEnergyBins(det, rebin)
 
 hist2D = []
@@ -117,7 +119,7 @@ for day in days:
     hist2D = [ r.TH2D('hist2D_flux_'+str(day)+'_'+str(en)+'MeV', 'hist2D_flux_'+str(day)+'_'+str(en)+'MeV', l_bins, np.array(l_fine_bins), numPbin-1, np.array(Pbins,dtype=float)) for en in energies]
     hist2D_en = [ r.TH2D('hist2D_flux_en_'+str(day)+'_'+str(en)+'MeV', 'hist2D_flux_en_'+str(day)+'_'+str(en)+'MeV', l_bins, np.array(l_fine_bins), numPbin-1, np.array(Pbins,dtype=float)) for en in energies]
     hist2D_loc = [ r.TH2D('hist2D_loc_flux_'+str(day)+'_'+str(en)+'MeV', 'hist2D_loc_flux_'+str(day)+'_'+str(en)+'MeV', 180, -180,180, 90,-90,90) for en in energies]
-    hist2D_time = [ r.TH2D('hist2D_time_flux_'+str(day)+'_'+str(en)+'MeV', 'hist2D_time_flux_'+str(day)+'_'+str(en)+'MeV', (60*24), 0, 24, 100, 0, 0.1) for en in energies]
+    hist2D_time = [ r.TH2D('hist2D_time_flux_'+str(day)+'_'+str(en)+'MeV', 'hist2D_time_flux_'+str(day)+'_'+str(en)+'MeV', (60*24), 0, 24, 100, 0, maxFluxForHist) for en in energies]
     av_Lalpha = [ {} for en in energies]
 
     # read in txt files with averages
@@ -283,11 +285,14 @@ print("with maximum counts of ",maxCounts)
 Significance = array('f', [0.])
 Tau = array('f', [0.])
 Mean = array('f', [0.])
+Chi = array('f', [0.])
 newBranch = t3.Branch('significance', Significance, 'significance/F')
 newBranch2 = t3.Branch('tau', Tau, 'tau/F')
 newBranch3 = t3.Branch('mean', Mean, 'mean/F')
+newBranch4 = t3.Branch('chiSquared', Chi, 'chiSquared/F')
 taus = {}
 means = {}
+chi2s = {}
 # loop through high flux tree
 vecCells = defaultdict(list)
 failedFits = 0
@@ -318,10 +323,11 @@ for key,value in vecCells.items():
     # fit exponential
     f1 = r.TF1("f1_"+str(key[0])+'_'+str(key[1])+'_'+str(key[2]),"[0]*exp(-x/[1])",hist1D_counts.GetBinCenter(maxbin),hist1D_counts.GetBinCenter(lastbin))
     f1.SetParameters(hist1D_counts.GetEntries(),hist1D_counts.GetRMS())
-    f1.SetParLimits(1, 1e-5,maxCounts)
+    f1.SetParLimits(1, 1e-5, 3*hist1D_counts.GetRMS())
     # first fitting in maximum range
     fresults = hist1D_counts.Fit(f1,"RSQ")
-    mean = hist1D_counts.GetMean()
+    # use instead of mean the value of the bin with maximum entries
+    mean = hist1D_counts.GetBinContent(maxbin) #hist1D_counts.GetMean()
     tau = 1
     chi2 = 1000
     failed = True
@@ -372,6 +378,7 @@ for key,value in vecCells.items():
     f.WriteObject(hist1D_counts,"hist1D_counts_"+str(key[0])+'_'+str(l_fine_bins[key[1]])+'_'+str(Pbins[key[2]]),'kOverwrite')
     taus[key]=tau
     means[key]=mean
+    chi2s[key]=chi2
     fit_summary[list(days).index(key[0])].Fill(l_fine_bins[key[1]], Pbins[key[2]], tau)
     if key[2]!=4:
         fit_summary[list(days).index(key[0])].Fill(l_fine_bins[key[1]], Pbins[8-key[2]], tau)
@@ -392,10 +399,12 @@ for h in t3:
         Significance[0] = (h.counts-means[h.day,iL,iP])/taus[h.day,iL,iP]
         Tau[0] = taus[h.day,iL,iP]
         Mean[0] = means[h.day,iL,iP]
+        Chi[0] = chi2s[h.day,iL,iP]
     else:
         Significance[0] = 0
         Tau[0] = 0
         Mean[0] = 0
+        Chi[0] = 0
 
     newBranch.Fill()
     newBranch2.Fill()

@@ -559,6 +559,10 @@ def getBeq(iL):
 
 # return equatorial pitch angle in degrees
 def getAlpha_eq(iAlpha, iB, iBeq):
+    if math.isnan(iAlpha):
+        print("Equatorial pitch angle not calculatable.. ")
+        print("Pitch angle is nan.")
+        return 999
     
     iAlpha_rad = np.radians(iAlpha)
     if iBeq/iB > 1.0:
@@ -572,7 +576,6 @@ def getAlpha_eq(iAlpha, iB, iBeq):
             alpha_eq = np.arcsin( np.sin( iAlpha_rad ) * np.sqrt(iBeq/iB) )
         else:
             alpha_eq = np.pi - np.arcsin( np.sin( iAlpha_rad ) * np.sqrt(iBeq/iB) )
-
         return math.degrees(alpha_eq)
 
 #__________________________________________________________

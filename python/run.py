@@ -14,7 +14,7 @@ parser.add_argument('--merge', action='store_true', help='Merge all runs.')
 parser.add_argument('--select', action='store_true', help='Merge all runs.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
 parser.add_argument('--day', type=int, required=False, help='Merge orbits of a specific day [yyyymmdd].')
-parser.add_argument('--month', type=int, required=False, help='Merge orbits of a specific month [yyyymm].')
+parser.add_argument('--month', type=int, default=201903, help='Merge orbits of a specific month [yyyymm].')
 parser.add_argument('--allHists', action='store_true', help='Merge all runs, including the histograms.')
 parser.add_argument('--ana', action='store_true', help='Analyse all runs.')
 parser.add_argument('--test', action='store_true', help='Analyse test runs.')
@@ -31,7 +31,7 @@ datapaths = []
 if args.hepd:
     #datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*.h5')
     # run all orbits in August 2018
-    datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*201903*.h5')
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*'+str(args.month)+'*.h5')
     if args.day:
         datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*'+str(args.day)+'*.h5')
     if args.test:
@@ -44,10 +44,10 @@ if args.hepd:
 elif args.hepp_l:
     det = 'hepp_l_channel_'+args.channel
     # get HEPP data of quiet period 1.-5.08.2018
-    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*20190331*.h5') #('/storage/gpfs_data/limadou/data/flight_data/analysis/data/h5/HEPP_august_2018/*.h5')
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*_'+str(args.month)+'*.h5') #('/storage/gpfs_data/limadou/data/flight_data/analysis/data/h5/HEPP_august_2018/*.h5')
     # ('/home/LIMADOU/cneubueser/public/HEPP_august_2018/*.h5')
     if args.day:
-        datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*'+str(args.day)+'*.h5')
+        datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*_'+str(args.day)+'*.h5')
     # select HEPP data from 22-26.02.2019 (solar quiet period) 
     #datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190222*.h5')
     #datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190223*.h5')
@@ -57,7 +57,7 @@ elif args.hepp_l:
 elif args.hepp_h:
     det = 'hepp_h'
     # get HEPP data of quiet period 1.-5.08.2018
-    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*201903*.h5') #('/storage/gpfs_data/limadou/data/flight_data/analysis/data/h5/HEPP_august_2018/*.h5')
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*'+str(args.month)+'*.h5') #('/storage/gpfs_data/limadou/data/flight_data/analysis/data/h5/HEPP_august_2018/*.h5')
     if args.day:
         datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*'+str(args.day)+'*.h5')
 # sort files by time
@@ -82,9 +82,6 @@ if not args.merge and not args.ana and not args.select and not args.clean:
         # calculate time between start and stop of orbit
         duration = abs(int(OrbitDateTime[7]) - int(OrbitDateTime[5]))
         if args.hepp_l or args.hepp_h:
-            #            print(OrbitDateTime)
-            #            print(OrbitDateTime[5])
-            #            print(OrbitDateTime[3])
             duration = abs(int(OrbitDateTime[6]) - int(OrbitDateTime[4]))
 
         if duration < 3000: ## half-orbit not completed
@@ -133,6 +130,12 @@ if not args.merge and not args.ana and not args.select and not args.clean:
 
             if args.submit:
                 exefilename = 'job_%s.sh'%(str(os.path.split(run)[1].replace('.h5','')))
+                if args.channel and args.integral:
+                    exefilename = exefilename.replace('000.','channel_'+str(args.channel)+'_int_'+str(args.integral)+'s.')
+                elif args.channel:
+                    exefilename = exefilename.replace('000.','channel_'+str(args.channel)+'.')
+                elif args.integral:
+                    exefilename = exefilename.replace('000.','int_'+str(args.integral)+'s.')
                 exefile = writeExecutionFile(home()+'/log/'+exefilename, cmd)
                 print("Write execution file to:", exefilename)
                 args_file.write("%s\n"%(home()+'/log/'+exefilename))
@@ -195,6 +198,9 @@ elif args.merge and not args.test:
         pathToFind = sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'
         if args.originalE:
             pathToFind += 'originalEnergyBins/'
+        elif args.integral:
+            pathToFind = sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'+str(args.integral)+'s/'
+
         mge = pathToFind+'all_'+det+'.root'
         runList = glob.glob(pathToFind+'CSES_01_HEP_'+str(index)+'_L02*.root') #CSES_01_HEP_1_*.root')
 
@@ -202,6 +208,9 @@ elif args.merge and not args.test:
             pathToFind = sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'
             if args.originalE:
                 pathToFind += 'originalEnergyBins/'
+            elif args.integral:
+                pathToFind = sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'+str(args.integral)+'s/'
+
             runList = sorted( glob.glob(pathToFind+'CSES_01_HEP_'+str(index)+'_L02_*'+str(args.day)+'*.root'), key=lambda x:float(x[-46:-41]) )
             mge = pathToFind+'all_'+det+'_'+str(args.day)+'_'+str(len(runList))+'_runs.root'
             findOld = glob.glob(pathToFind+'all_'+det+'_'+str(args.day)+'*.root')
@@ -325,6 +334,9 @@ if args.clean:
     detPath = det
     if args.originalE:
         detPath+='/originalEnergyBins'
+    elif args.integral:
+        detPath+='/'+str(args.integral)+'s'
+
     datapaths = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/*000.root')
     if not (args.hepp_l or args.hepp_h):
         print("Clean-up only necessary for HEPP data. ")

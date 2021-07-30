@@ -76,6 +76,7 @@ out_tree = r.TTree( 'events', 'tree of fluxes' )
 Ev = array('i', [0])
 Flux = array( 'f', [0.] )
 Signal = array( 'f', [0.] )
+Channel = array( 'i', [0] )
 Day = array('i', [0])
 Time = array( 'f', [0.] )
 Longitude = array('i', [0])
@@ -90,6 +91,7 @@ GeomInd = array('i', [0])
 out_tree.Branch( 'event', Ev, 'event/I' )
 out_tree.Branch( 'flux', Flux, 'flux/F' )
 out_tree.Branch( 'counts', Signal, 'counts/F' )
+out_tree.Branch( 'channel', Channel, 'channel/I' )
 out_tree.Branch( 'day', Day, 'day/I' )
 out_tree.Branch( 'time', Time, 'time/F' )
 out_tree.Branch( 'lon', Longitude, 'lon/I' )
@@ -193,23 +195,28 @@ for day in days:
                 # set sigma like threshold
                 if args.fitted:
                     xSigma = average + args.sigma*rms 
-                # get array of fluxes in the L-alpha bin
-                flux = getattr(tree,"flux_"+str(l_fine_bins[L_bin])+"_"+str(Pbins[alpha_bin]))
-                
+                ## get array of fluxes in the L-alpha bin
+                #flux = getattr(tree,"flux_"+str(l_fine_bins[L_bin])+"_"+str(Pbins[alpha_bin]))
+                #matchingEnergy = list(getattr(tree,"energy_"+str(l_fine_bins[L_bin])+"_"+str(Pbins[alpha_bin])))
+                #matchingEnergy =  [round(x,2) for x in matchingEnergy]
+                ## get proper binned flux
+                #matchedBin = matchingEnergy.index( round(energyStored,2) )
+                flux=ev.flux[ia]
+
                 # if flux is above threshold
-                if len(flux) > ia and flux[ia]>xSigma:
+                if flux>xSigma:
                     if args.debug:
                         print("L-alpha :      ", ev.L, alpha)
                         print("L-alpha bins : ", L_bin, alpha_bin)
                         print("average :      ", average)
                         print("rms :          ", rms)
                         print('X sigma:       ', xSigma)
-                        print('Found flux:    ', flux[ia])
+                        print('Found flux:    ', flux)
                     
-                    hist2D[energy_bin].Fill(L, alpha, flux[ia])
+                    hist2D[energy_bin].Fill(L, alpha, flux)
                     hist2D_en[energy_bin].Fill(L, alpha)
-                    hist2D_loc[energy_bin].Fill(ev.Long, ev.Lat, flux[ia])
-                    hist2D_time[energy_bin].Fill(ev.time, flux[ia])
+                    hist2D_loc[energy_bin].Fill(ev.Long, ev.Lat, flux)
+                    hist2D_time[energy_bin].Fill(ev.time, flux)
 
                     # get minutes from digits in 'time'
                     storedTime = ev.time
@@ -221,12 +228,13 @@ for day in days:
                         geoIndex = -1
                     # fill output tree
                     Ev[0] = count
-                    Flux[0] = flux[ia]
+                    Flux[0] = flux
                     if invGeomFactor!=0:
                         # define signal as #counts, rmsErr is half-width of flux distributions
-                        Signal[0] = flux[ia]/invGeomFactor
+                        Signal[0] = flux/invGeomFactor
                     else:
-                        Signal[0] = flux[ia]
+                        Signal[0] = flux
+                    Channel[0] = ev.channel[ia]
                     Day[0] = day
                     Time[0] = storedTime # daily hours
                     Longitude[0] = ev.Long

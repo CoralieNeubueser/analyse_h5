@@ -179,6 +179,7 @@ for cell_l in range(0,len(l_x_bins)-1):
     for cell_p in range(0,len(p_x_bins)-1):
         vecCells[cell_l,cell_p] = r.std.vector(float)()
         tree.Branch( 'flux_'+str(l_x_bins[cell_l])+'_'+str(p_x_bins[cell_p]), vecCells[cell_l,cell_p]) 
+
 # not needed when summed over energy
 if version!='v2.1':
     vecCellsEn = {} 

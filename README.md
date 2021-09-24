@@ -73,6 +73,21 @@ python3 python/findHighFluxes.py --data hepd --inputFile {limadou_directory}/dat
 The input file can be varied, and the type of data (either HEPD of HEPP-L) needs to be specified.
 You will find the output in the directory of the ```inputFile``` as ```all_highFluxes.root```
 
+# Run the Clustering algorithm on high fluxes for EQ correlation
+The previously created 'high flux' data is used as an input for the clustering algorithm that consists of 3 steps:
+1. determine (again) the highest fluxes by a cut to be used as threshold for the seeds of the clustering. Here you have the choice between '99perc','z_score_more2','z_score_more3','dummy_cut'. The definitions can be found here. These cuts are determined per day, per L shell (in int steps), and per alpha bin. The values are stored in pickle files.
+2.  If you want to run the clustering per month, in the second step the accessible data over that defined month (```--month YYYYMM```) are merged into a sinlge root file.
+3.  The actual clustering is performed, here there are 2 possible paramters to be chosen: window size in seconds (```--window x```) and the number of seeds that have to cross the threshold to be found wihtin that window in order to build a cluster (```--seeds y```).
+
+An example execution in the command line looks like that:
+~~~
+python3 python/run.py --cluster --hepp_l --channel wide --day 20180801 --numRuns 1
+~~~
+The output of step 1. is stored in:
+```{limadou_directory}/data/thresholds/{SW_version}/{det}/```
+The root file with the fluxes, and the cluster info is stored in:
+```{limadou_directory}/data/root/{SW_version}/{det}/clustered/{type_of_cut}/{windowSize}s_window/{seeds}_seeds/
+
 # Example analysis
 to work on the root trees and run higher level analysis, try e.g.:
 ~~~

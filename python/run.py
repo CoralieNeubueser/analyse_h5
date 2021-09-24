@@ -15,7 +15,7 @@ parser.add_argument('--merge', action='store_true', help='Merge all runs, per mo
 parser.add_argument('--select', action='store_true', help='Select 1% highest fluxes, writes out new root file.')
 parser.add_argument('--ana', action='store_true', help='Analyse all runs.')
 parser.add_argument('--cluster', action='store_true', help='Run clustering on 1% highest fluxes.')
-parser.add_argument('--cut', type=str, default='99perc', help='Define the cut type.')
+parser.add_argument('--cut', type=str, default='99perc', choices=['99perc','z_score_more2','z_score_more3','dummy_cut'], help='Define the cut type.')
 parser.add_argument('--window',type=int, default=10, help='Define window length in s.')
 parser.add_argument('--seeds', type=int, default=4, help='Define numer of seeds necessary to build cluster.')
 
@@ -335,13 +335,13 @@ elif args.cluster:
     thresholdDir = sharedOutPath()+'data/thresholds/'+args.useVersion+'/'+detPath+'/'
     thresholdFile = thresholdDir+'thresholds_'+str(args.month)+'.pkl'
     clusterInput = ''
+    cmdTot=''
 
     if not args.day:
         for iday in range(1,32):
             strday = str(iday)
             if iday < 10:
                 strday = '0'+str(iday)
-            #print( sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/'+fileSnip+str(args.month)+strday+'*.root' )
             found = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/'+fileSnip+str(args.month)+strday+'*.root')
             for every in found:
                 findFile.append( every )
@@ -363,9 +363,7 @@ elif args.cluster:
         for ifile in findFile:
             cmd += ifile+' '
         cmd += ' --OUTDIR '+thresholdDir+' --OUTFILE '+os.path.basename(thresholdFile)+' --PLOTON 0\n'
-    
-        print(cmd)
-        os.system(cmd)
+        cmdTot=cmd
 
     # 2. merge into month
     if not args.day:
@@ -382,9 +380,22 @@ elif args.cluster:
     os.system('cp '+clusterInput+' '+clusterOutdir)   
 
     cmd2 = 'python3 python/cluster_finding.py --IN '+clusterOutdir+os.path.basename(clusterInput)+' --OUT ./ --CUT '+args.cut+' --CUTfile '+thresholdFile+' --WINDOW '+str(args.window)+' --MINNSEED '+str(args.seeds)
-    print(cmd2)
+    
+    cmdTot += cmd2
+    print(cmdTot)
 
-    os.system(cmd2)
+    # submit to Condor 
+    if args.submit:
+        exefilename = 'job_cluster_%s_%s_%s_%s.sh'%(os.path.basename(clusterInput),args.cut,str(args.window),str(args.seeds))
+        exefile = writeExecutionFile(home()+'/log/'+exefilename, cmdTot)
+        print("Write execution file to:", exefilename)
+        args_file.write("%s\n"%(home()+'/log/'+exefilename))
+        args_file.close()
+        
+        SubmitListToCondor(args_file)
+    # or run locally
+    else:
+        os.system(cmd)
 
 
 if args.clean:

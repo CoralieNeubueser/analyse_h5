@@ -40,11 +40,11 @@ for dset in traverse_datasets(f):
     if args.debug:
         print(dset, f[dset].shape, f[dset].dtype)
     
-parameters = dict([('hepd', ['L_parameter', 'HEPD_ele_energy_table', 'HEPD_ele_pitch_table', 'HEPD_ele_energy_pitch', 'UTCTime', 'HEPD_ele_counts','B']),
-                   ('hepp_l', ['L_parameter', 'Energy_Table_Electron', 'PitchAngle', 'A411', 'UTC_TIME', 'Count_Electron', 'CyclotronFrequency_Electron']),
+parameters = dict([('hepd', ['L_parameter', 'HEPD_ele_energy_table', 'HEPD_ele_pitch_table', 'HEPD_ele_energy_pitch', 'UTCTime', 'HEPD_ele_counts','B','Altitude']),
+                   ('hepp_l', ['L_parameter', 'Energy_Table_Electron', 'PitchAngle', 'A411', 'UTC_TIME', 'Count_Electron', 'CyclotronFrequency_Electron','ALTITUDE']),
                    #('hepp_l', ['HEPP-Lparameter', 'Energy_Table_Electron', 'PitchAngle', 'A411', 'UTC_TIME', 'Count_electron', 'Count_electron']),
                    #('hepp', ['L_parameter', 'electron_energy_table', 'PitchAngle', 'electron_energyPitchAngleSpectrum', 'UTCTime', 'electron_counts', 'electron_gyrofrequency'])
-                   ('hepp_h', ['L_parameter', 'Energy_Table_Electron', 'PitchAngle', 'A411', 'UTC_TIME', 'Count_Electron', 'CyclotronFrequency_Electron'])
+                   ('hepp_h', ['L_parameter', 'Energy_Table_Electron', 'PitchAngle', 'A411', 'UTC_TIME', 'Count_Electron', 'CyclotronFrequency_Electron','ALTITUDE'])
 
                ])
 lonlat = dict([('hepd', ['LonLat', 'LonLat'] ),
@@ -72,6 +72,7 @@ dset2 = f[parameters[args.data][3]][()]
 dset_time = f[parameters[args.data][4]][()]
 dset_count = f[parameters[args.data][5]][()]
 dset_field = f[parameters[args.data][6]][()]
+dset_alt = f[parameters[args.data][7]][()]
 
 maxEv = len(dset2)
 if args.debug:
@@ -148,6 +149,7 @@ geomLo = array( 'i', [ 0 ] )
 geomLa = array( 'i', [ 0 ] )
 B = array( 'f', [ 0. ] )
 B_eq = array( 'f', [ 0. ] )
+Alt = array( 'f', [ 0. ] )
 Ev = array( 'i', [ 0 ] )
 Ch_vec = r.std.vector(int)()
 
@@ -170,6 +172,7 @@ tree.Branch( 'geomLong', geomLo, 'geomLong/I' )
 tree.Branch( 'geomLat', geomLa, 'geomLat/I' )
 tree.Branch( 'field', B, 'field/F' )
 tree.Branch( 'field_eq', B_eq, 'field_eq/F' )
+tree.Branch( 'altitude', Alt, 'altitude/F' )
 
 # define the L-pitch map
 energyBins = getEnergyBins(args.data, rebin)
@@ -462,7 +465,8 @@ for iev,ev in enumerate(dset2):
     B[0] = Bfield
     B_eq[0] = Beq
     N[0] = countFlux
-    
+    Alt[0] = dset_alt[iev]
+
     # fill tree
     tree.Fill()
     # clean-up

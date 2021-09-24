@@ -85,6 +85,7 @@ Longitude_geom = array('i', [0])
 Latitude_geom = array('i', [0])
 Lshell = array('f', [0.])
 Alpha_eq = array('f', [0.])
+Pitch = array('f', [0.])
 Energy = array('f', [0.])
 GeomInd = array('i', [0])
 
@@ -101,6 +102,7 @@ out_tree.Branch( 'geom_lat', Latitude_geom, 'geom_lat/I' )
 out_tree.Branch( 'L', Lshell, 'L/F' )
 out_tree.Branch( 'alpha', Alpha_eq, 'alpha/F' )
 out_tree.Branch( 'energy', Energy, 'energy/F' )
+out_tree.Branch( 'pitch', Pitch, 'pitch/F' )
 out_tree.Branch( 'geomIndex', GeomInd, 'geomIndex/I' )
 
 # get a list of all days, for which data was taken
@@ -241,7 +243,7 @@ for day in days:
                     Latitude[0] = ev.Lat
                     Longitude_geom[0] = ev.geomLong
                     Latitude_geom[0] = ev.geomLat
-      
+                    
                     # write in L bins
                     # use fine L bins
                     Lshell[0] = L_binValue
@@ -250,6 +252,7 @@ for day in days:
                     Alpha_eq[0] = binned_alpha
                     Energy[0] = energy[ia]
                     GeomInd[0] = geoIndex
+                    Pitch[0] = ev.pitch[ia]
 
                     out_tree.Fill()
 

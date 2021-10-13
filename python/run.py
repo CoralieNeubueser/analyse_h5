@@ -374,7 +374,7 @@ elif args.cluster:
 
     # 3. run clustering
     alreadyDone=False
-    clusterOutdir = sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/clustered/'+args.cut+'/'+str(args.window)+'s_window/'+str(args.seeds)+'_seeds/'
+    clusterOutdir = sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/clustered_inEnergy/'+args.cut+'/'+str(args.window)+'s_window/'+str(args.seeds)+'_seeds/'
     if not os.path.exists( clusterOutdir ):
         print("Directory is created: ", clusterOutdir)
         os.makedirs( clusterOutdir )

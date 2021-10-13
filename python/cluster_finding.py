@@ -29,7 +29,7 @@ def main():
 
     print('Entries before '+str(cut_name), nentries)
 
-    time, alpha, pitch, L, event_idx, cut = [], [], [], [], [], []
+    time, alpha, pitch, L, energy, event_idx, cut = [], [], [], [], [], [], []
 
     for i in np.arange(0,nentries):
         tree_sig.GetEntry(i)
@@ -49,12 +49,13 @@ def main():
         time.append(time_sec)
         alpha.append(tree_sig.alpha)
         L.append(tree_sig.L)
+        energy.append(tree_sig.energy)
         event_idx.append(i)
 
     print('Entries after '+str(cut_name), len(time))
 
     # clustering algorithm lines
-    X = np.stack([np.array(time),np.array(alpha)*10000.,np.array(L)*10000.],axis=1)
+    X = np.stack([np.array(time),np.array(alpha)*10000.,np.array(L)*10000.,np.array(energy)*10000],axis=1)
     clustering = DBSCAN(eps=window_size, metric='euclidean', min_samples=1, n_jobs=-1).fit(X)
     y_temp = clustering.labels_
 

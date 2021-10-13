@@ -75,7 +75,7 @@ You will find the output in the directory of the ```inputFile``` as ```all_highF
 
 # Run the Clustering algorithm on high fluxes for EQ correlation
 The previously created 'high flux' data is used as an input for the clustering algorithm that consists of 3 steps:
-1. determine (again) the highest fluxes by a cut to be used as threshold for the seeds of the clustering. Here you have the choice between '99perc','z_score_more2','z_score_more3','dummy_cut'. The definitions can be found [here](https://agenda.infn.it/event/27436/contributions/139005/attachments/82451/108325/clustering_20210614.pdf). These cuts are determined per day, per L shell (in int steps), and per alpha bin. The values are stored in pickle files.
+1. determine (again) the highest fluxes by a cut to be used as threshold for the seeds of the clustering. Here you have the choice between '99perc','z_score_more2','z_score_more3','dummy_cut' (```--cut str```). The definitions can be found [here](https://agenda.infn.it/event/27436/contributions/139005/attachments/82451/108325/clustering_20210614.pdf). These cuts are determined per day, per L shell (in int steps), and per alpha bin. The values are stored in pickle files.
 2.  If you want to run the clustering per month, in the second step the accessible data over that defined month (```--month YYYYMM```) are merged into a sinlge root file.
 3.  The actual clustering is performed, here there are 2 possible paramters to be chosen: window size in seconds (```--window x```) and the number of seeds that have to cross the threshold to be found wihtin that window in order to build a cluster (```--seeds y```).
 

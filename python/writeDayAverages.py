@@ -90,8 +90,10 @@ def getParallelMeans(strHist):
             if ( entr > threshold ):
                 mean = hist.GetMean()
                 rms = hist.GetRMS()
+                rms_99_of_99 = -1
                 meanErr = hist.GetMeanError()
                 rmsErr = hist.GetRMSError()
+                rmsErr_99_of_99 = -1
                 chi2 = 0 
                 converged = False
 
@@ -178,23 +180,31 @@ def getParallelMeans(strHist):
                     rmsErr = tauErr
 
                 else:  
-                    # test a RMS99 implementation
+                    # test a RMS99 implementation, adding a 99.99% threshold estimate
                     content=0
                     mbin=0
+                    mbin_99_of_99=0
                     for ibin in range(hist.GetNbinsX()):
                         content+=hist.GetBinContent(ibin)
                         if content/entr<0.99:
                             mbin=ibin
+                        elif content/entr<0.9999:
+                            mbin_99_of_99=ibin
                         else:
                             break
                     rms = hist.GetBinCenter(mbin)+hist.GetBinWidth(mbin)/2.
                     rmsErr = hist.GetBinWidth(mbin)/2.
+                    rms_99_of_99 = hist.GetBinCenter(mbin_99_of_99)+hist.GetBinWidth(mbin_99_of_99)/2.
+                    rmsErr_99_of_99 = hist.GetBinWidth(mbin_99_of_99)/2.
+
                     if rms==0:
-                        rms = hist.GetBinWidth(mbin)
+                        rms = rmsErr
+                    if rms_99_of_99==0:
+                        rms_99_of_99 = rmsErr_99_of_99
 
                 # write mean etc. into txt file
                 with open(strHist[6], 'a') as txtFile:
-                    line = strHist[5]+'{} {:.8f} {:.8f} {:.8f} {:.8f} {:.1f} {} {:.3f}\n'.format(hist.GetEntries(), mean, meanErr, rms, rmsErr, chi2, int(converged==True), geo)
+                    line = strHist[5]+'{} {:.8f} {:.8f} {:.8f} {:.8f} {:8f} {:8f} {:.1f} {} {:.3f}\n'.format(hist.GetEntries(), mean, meanErr, rms, rmsErr, rms_99_of_99, rmsErr_99_of_99, chi2, int(converged==True), geo)
                     txtFile.writelines(line)
                 # prepare the histogram for drawing and add to list
                 hist.SetName(strHist[4]) 
@@ -263,7 +273,7 @@ for d in lst:
       meanGeomIndex = getGeomIndex(data, d)
       print("Write averages in: ", outFileName)
       outFile = open(outFileName, 'w')
-      outFile.write('energy L pitch entries mean meanErr rms rmsErr chi2 fit avGeomIndex\n')
+      outFile.write('energy L pitch entries mean meanErr rms rmsErr rms99_of_99 rmsErr99_of_99 chi2 fit avGeomIndex\n')
       outFile.close()
       count = 0
       

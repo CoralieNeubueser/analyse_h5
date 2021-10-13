@@ -19,8 +19,9 @@ def main():
     cut_name = args.CUT
     min_seed_number = args.MINNSEED
 
-    cut_file = pkl.load(open(args.CUTfile,'rb'))
-    df_cut = pd.DataFrame(cut_file)
+    if cut_name!='99perc':
+        cut_file = pkl.load(open(args.CUTfile,'rb'))
+        df_cut = pd.DataFrame(cut_file)
 
     file_root = r.TFile(args.IN,"READ")
     tree_sig = file_root.Get("events")
@@ -35,11 +36,17 @@ def main():
         tree_sig.GetEntry(i)
 
         day = float(str(tree_sig.day)[-2:])
-        cut_val = df_cut[(df_cut.day.values==day) & (df_cut.L.values== tree_sig.L) & (df_cut.alpha.values == tree_sig.alpha) & (df_cut.energy.values==tree_sig.energy)][cut_name].values[0]
-        cut.append(cut_val)
-
-        if tree_sig.counts < cut_val:
-            continue
+        
+        if cut_name=='99perc':
+            cut_val = tree_sig.rms99_of_99
+            cut.append(cut_val)
+            if tree_sig.flux < cut_val:
+                continue
+        else:
+            cut_val = df_cut[(df_cut.day.values==day) & (df_cut.L.values== tree_sig.L) & (df_cut.alpha.values == tree_sig.alpha) & (df_cut.energy.values==tree_sig.energy)][cut_name].values[0]
+            cut.append(cut_val)
+            if tree_sig.counts < cut_val:
+                continue
 
         time_hour = float(tree_sig.time)+24.*(day-1)
 

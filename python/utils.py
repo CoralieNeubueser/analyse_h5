@@ -448,6 +448,22 @@ def getDays(tree):
         lst_days.add(ev.day)
     return lst_days
 
+# read in daily averages, rms99, and rms99_of_99
+# return list of dict
+def readAverageFile(fileName,storedEn):
+
+    av_Lalpha = [ {} for en in storedEn]
+    file = open(fileName, "r")
+    next(file)
+    for line in file:
+        columns = [float(i) for i in line.split()]
+        col_energy = columns[0]
+        energyStored = col_energy
+        en_index = storedEn.index( energyStored )
+        # fill dictionary from (L, alpha) -> (mean, rms, rmsErr, rms99_of_99, rmsErr_99_of_99)
+        av_Lalpha[en_index].update( {( columns[1],int(columns[2]) ):( columns[4],columns[6],columns[7],columns[8],columns[9] )} )
+    return av_Lalpha
+
 # helper to merge not only root tree, but the 2D histograms in a file as well
 # specify if neede with bool 'allHists'
 def merge(name, listOfFiles, runs, allHists):

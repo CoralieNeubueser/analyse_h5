@@ -289,7 +289,7 @@ elif args.select:
     if args.test:
         detPath = 'L3_test/L3_repro'
         fileSnip = 'all_'
-    if args.month:
+    if not args.day:
         for iday in range(1,32):
             strday = str(iday)
             if iday < 10:
@@ -351,13 +351,17 @@ elif args.cluster:
         clusterInput = findFile[0]
 
     # 1. write thresholds 
+    # check if directory exists
     if not os.path.exists( thresholdDir ):
         print("Directory is created: ", thresholdDir)
         os.makedirs( thresholdDir )
-
+    # check if threshold file already exists, if so, skip this step
     if os.path.isfile( thresholdFile ):
         print("Files with thresholds already exists. ")
-
+    # do nothing if 99.99% threshold is used for seeds in clusters 
+    elif args.cut=='99perc':
+        print("Use in tree stored rms99of99 thresholds.")
+    # determine thresholds..
     else:
         cmd = 'python3 python/threshold_estimation.py --INFILES '
         for ifile in findFile:

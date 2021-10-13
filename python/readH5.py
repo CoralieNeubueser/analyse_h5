@@ -297,6 +297,7 @@ for iev,ev in enumerate(dset2):
             print("Beq [nT]:               ", round(Beq,2))
             print("Count:   ", countInt)
             if iev==4:
+                print("ATTENTION!!! in debug mode only 4 events will be processed! use -q")
                 break
     
         # loop through energy bins

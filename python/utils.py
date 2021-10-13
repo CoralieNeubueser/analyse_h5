@@ -715,12 +715,16 @@ def readIGRF(day):
 
 def getGeomIndex(dic, day):
     ###
-    allGeomIndices = []
-    for line in dic:
-        if line[0] == day:
-            allGeomIndices.append(dic[line])
+    print(str(day)[0:4])
+    if int(str(day)[0:4])>2020:
+        return -1
+    else:
+        allGeomIndices = []
+        for line in dic:
+            if line[0] == day:
+                allGeomIndices.append(dic[line])
     
-    return np.mean(np.array(allGeomIndices))
+        return np.mean(np.array(allGeomIndices))
 
 def getAlphaLindex(alpha_v, L_v):
     # find corresponding L/alpha bin, and use the average Lshell and alpha values                                                  

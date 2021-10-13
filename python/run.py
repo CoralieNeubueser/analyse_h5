@@ -362,7 +362,7 @@ elif args.cluster:
         cmd = 'python3 python/threshold_estimation.py --INFILES '
         for ifile in findFile:
             cmd += ifile+' '
-        cmd += ' --OUTDIR '+thresholdDir+' --OUTFILE '+os.path.basename(thresholdFile)+' --PLOTON 0\n'
+        cmd += ' --OUTDIR '+thresholdDir+' --OUTFILE '+os.path.basename(thresholdFile)+' --PLOTON 1\n'
         cmdTot=cmd
 
     # 2. merge into month
@@ -373,29 +373,35 @@ elif args.cluster:
             os.system('hadd -f -k '+mge+' '+str(findFile).replace(']','').replace('[','').replace(',',' '))
 
     # 3. run clustering
+    alreadyDone=False
     clusterOutdir = sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/clustered/'+args.cut+'/'+str(args.window)+'s_window/'+str(args.seeds)+'_seeds/'
     if not os.path.exists( clusterOutdir ):
         print("Directory is created: ", clusterOutdir)
         os.makedirs( clusterOutdir )
-    os.system('cp '+clusterInput+' '+clusterOutdir)   
+    elif os.path.isfile( clusterOutdir+os.path.basename(clusterInput) ):
+        print('Clustering already done, use different parameters!')
+        alreadyDone=True
 
-    cmd2 = 'python3 python/cluster_finding.py --IN '+clusterOutdir+os.path.basename(clusterInput)+' --OUT ./ --CUT '+args.cut+' --CUTfile '+thresholdFile+' --WINDOW '+str(args.window)+' --MINNSEED '+str(args.seeds)
+    if not alreadyDone:
+        os.system('cp '+clusterInput+' '+clusterOutdir)   
+
+        cmd2 = 'python3 python/cluster_finding.py --IN '+clusterOutdir+os.path.basename(clusterInput)+' --OUT ./ --CUT '+args.cut+' --CUTfile '+thresholdFile+' --WINDOW '+str(args.window)+' --MINNSEED '+str(args.seeds)
     
-    cmdTot += cmd2
-    print(cmdTot)
+        cmdTot += cmd2
+        print(cmdTot)
 
-    # submit to Condor 
-    if args.submit:
-        exefilename = 'job_cluster_%s_%s_%s_%s.sh'%(os.path.basename(clusterInput),args.cut,str(args.window),str(args.seeds))
-        exefile = writeExecutionFile(home()+'/log/'+exefilename, cmdTot)
-        print("Write execution file to:", exefilename)
-        args_file.write("%s\n"%(home()+'/log/'+exefilename))
-        args_file.close()
+        # submit to Condor 
+        if args.submit:
+            exefilename = 'job_cluster_%s_%s_%s_%s.sh'%(os.path.basename(clusterInput),args.cut,str(args.window),str(args.seeds))
+            exefile = writeExecutionFile(home()+'/log/'+exefilename, cmdTot)
+            print("Write execution file to:", exefilename)
+            args_file.write("%s\n"%(home()+'/log/'+exefilename))
+            args_file.close()
         
-        SubmitListToCondor(args_file)
-    # or run locally
-    else:
-        os.system(cmd)
+            SubmitListToCondor(args_file)
+        # or run locally
+        else:
+            os.system(cmdTot)
 
 
 if args.clean:

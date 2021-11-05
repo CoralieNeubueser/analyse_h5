@@ -10,12 +10,13 @@ parser.add_argument('--channel', type=str, required= '--hepp_l' in sys.argv,  ch
 ### ACTIONS
 ### defaults action reads h5 and writes out root files
 parser.add_argument('--numRuns', type=int, help='Define number of runs to be analysed.', required=True)
+parser.add_argument('--EQlist', action='store_true', help='Run analysis on specific days, defined by list of EQs (2019-2021).')
 parser.add_argument('--clean', action='store_true', help='Clean up HEPP files of overlapping orbits.')
 parser.add_argument('--merge', action='store_true', help='Merge all runs, per month and writes out RMS99 threshold.')
 parser.add_argument('--select', action='store_true', help='Select 1% highest fluxes, writes out new root file.')
 parser.add_argument('--ana', action='store_true', help='Analyse all runs.')
 parser.add_argument('--cluster', action='store_true', help='Run clustering on 1% highest fluxes.')
-parser.add_argument('--cut', type=str, default='99perc', choices=['99perc','z_score_more2','z_score_more3','dummy_cut'], help='Define the cut type.')
+parser.add_argument('--cut', type=str, default='99perc', choices=['99perc','weights','z_score_more2','z_score_more3','dummy_cut'], help='Define the cut type.')
 parser.add_argument('--window',type=int, default=10, help='Define window length in s.')
 parser.add_argument('--seeds', type=int, default=4, help='Define numer of seeds necessary to build cluster.')
 
@@ -23,6 +24,7 @@ parser.add_argument('--seeds', type=int, default=4, help='Define numer of seeds 
 parser.add_argument('--originalE', action='store_true', help='Use fine energy binning.')
 parser.add_argument('--fit', action='store_true', help='Fit flux distributions with exponential.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
+parser.add_argument('--draw', action='store_true', help='Allows to write out root file with distributions that were used to extract averages, and RMS99.')
 parser.add_argument('--allHists', action='store_true', help='Merge all runs, including the histograms.')
 parser.add_argument('--test', action='store_true', help='Analyse test runs.')
 ### define specific period to run over
@@ -36,6 +38,9 @@ args,_=parser.parse_known_args()
 
 runs = args.numRuns
 os.system('source /opt/exp_software/limadou/set_env_standalone.sh')
+
+if args.EQlist:
+    readEQlist()
 
 det = 'hepd'
 datapaths = []
@@ -245,11 +250,11 @@ elif args.merge and not args.test:
     #for ifile in runList:
     #    cmd += ifile+' '
     #cmd += '\n'
-    cmd = 'python3 python/writeDayAverages.py --drawHistos --useVersion '+args.useVersion+' --inputFile '+mge+' --data '+det+' '
+    cmd = 'python3 python/writeDayAverages.py --useVersion '+args.useVersion+' --inputFile '+mge+' --data '+det+' '
     if args.originalE:
         cmd += '--originalEnergyBins '
-    if args.fit:
-        cmd += '--fit ' 
+    if args.draw:
+        cmd += '--drawHistos '
     if args.day:
         cmd += '--day '+str(args.day)
         if args.submit:
@@ -359,8 +364,8 @@ elif args.cluster:
     if os.path.isfile( thresholdFile ):
         print("Files with thresholds already exists. ")
     # do nothing if 99.99% threshold is used for seeds in clusters 
-    elif args.cut=='99perc':
-        print("Use in tree stored rms99of99 thresholds.")
+    elif args.cut=='99perc' or args.cut=='weights' or args.cut=='dummy_cut':
+        print("Use in tree stored rms99of99, of weights as thresholds.")
     # determine thresholds..
     else:
         cmd = 'python3 python/threshold_estimation.py --INFILES '

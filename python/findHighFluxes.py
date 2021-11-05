@@ -91,6 +91,7 @@ Energy = array('f', [0.])
 RMS99 = array('f', [0.])
 RMS99of99 = array('f', [0.])
 RMS99Err = array('f', [0.])
+Weight = array('f', [0.])
 GeomInd = array('i', [0])
 
 out_tree.Branch( 'event', Ev, 'event/I' )
@@ -110,6 +111,7 @@ out_tree.Branch( 'pitch', Pitch, 'pitch/F' )
 out_tree.Branch( 'rms99', RMS99, 'rms99/F' )
 out_tree.Branch( 'rmsErr99', RMS99Err, 'rmsErr99/F' )
 out_tree.Branch( 'rms99_of_99', RMS99of99, 'rms99_of_99/F' )
+out_tree.Branch( 'weight', Weight, 'weight/F' )
 out_tree.Branch( 'geomIndex', GeomInd, 'geomIndex/I' )
 
 # get a list of all days, for which data was taken
@@ -184,19 +186,20 @@ for day in days:
             if (L_binValue, alpha_binValue) in av_Lalpha[energy_bin]:
             
                 average = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][0]
-                rms = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][1]
-                rmsErr = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][2]
+                rms99 = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][1]
+                rms99Err = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][2]
                 rms99of99 = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][3]
+                weight = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][5]
 
                 # get daily average in L-alpha cell
                 # set RMS99 as threshold for 1% highest fluxes
-                xSigma = args.sigma*rms
-                if rms==0:
+                xSigma = args.sigma*rms99
+                if rms99==0:
                     # use bin width as threshold 
-                    xSigma = args.sigma*(2.*rmsErr)
+                    xSigma = args.sigma*(2.*rms99Err)
                 # set sigma like threshold
                 if args.fitted:
-                    xSigma = average + args.sigma*rms 
+                    xSigma = average + args.sigma*rms99 
                 ## get array of fluxes in the L-alpha bin
                 #flux = getattr(tree,"flux_"+str(l_fine_bins[L_bin])+"_"+str(Pbins[alpha_bin]))
                 #matchingEnergy = list(getattr(tree,"energy_"+str(l_fine_bins[L_bin])+"_"+str(Pbins[alpha_bin])))
@@ -204,16 +207,16 @@ for day in days:
                 ## get proper binned flux
                 #matchedBin = matchingEnergy.index( round(energyStored,2) )
                 flux=ev.flux[ia]
-
-                # if flux is above threshold
-                if flux>xSigma:
+                counts=ev.flux[ia]/invGeomFactor
+                # if counts is above threshold
+                if counts>xSigma:
                     if args.debug:
-                        print("L-alpha :      ", ev.L, alpha)
-                        print("L-alpha bins : ", L_bin, alpha_bin)
-                        print("average :      ", average)
-                        print("rms :          ", rms)
-                        print('X sigma:       ', xSigma)
-                        print('Found flux:    ', flux)
+                        print("L-alpha :        ", ev.L, alpha)
+                        print("L-alpha bins :   ", L_bin, alpha_bin)
+                        print("average flux     ", average)
+                        print("rms99 in counts: ", rms99)
+                        print('X sigma:         ', xSigma)
+                        print('Found counts:    ', counts)
                     
                     hist2D[energy_bin].Fill(L, alpha, flux)
                     hist2D_en[energy_bin].Fill(L, alpha)
@@ -253,9 +256,11 @@ for day in days:
                     Energy[0] = energy[ia]
                     GeomInd[0] = geoIndex
                     Pitch[0] = ev.pitch[ia]
-                    RMS99[0] = rms
-                    RMS99Err[0] = rmsErr
+                    RMS99[0] = rms99
+                    RMS99Err[0] = rms99Err
                     RMS99of99[0] = rms99of99
+                    Weight[0] = weight
+
                     out_tree.Fill()
 
                     if Signal[0]>maxCounts:

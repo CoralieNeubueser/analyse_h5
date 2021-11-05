@@ -19,7 +19,7 @@ def main():
     cut_name = args.CUT
     min_seed_number = args.MINNSEED
 
-    if cut_name!='99perc':
+    if cut_name!='99perc' and cut_name!='weights' and cut_name!='dummy_cut':
         cut_file = pkl.load(open(args.CUTfile,'rb'))
         df_cut = pd.DataFrame(cut_file)
 
@@ -40,8 +40,19 @@ def main():
         if cut_name=='99perc':
             cut_val = tree_sig.rms99_of_99
             cut.append(cut_val)
-            if tree_sig.flux < cut_val:
+            if tree_sig.counts < cut_val:
                 continue
+
+        elif cut_name=='weights':
+            cut_val = tree_sig.weight
+            cut.append(cut_val)
+            if cut_val < 2:
+                continue
+
+        elif cut_name=='dummy_cut':
+            cut_val = 0
+            cut.append(cut_val)
+            
         else:
             cut_val = df_cut[(df_cut.day.values==day) & (df_cut.L.values== tree_sig.L) & (df_cut.alpha.values == tree_sig.alpha) & (df_cut.energy.values==tree_sig.energy)][cut_name].values[0]
             cut.append(cut_val)
@@ -102,13 +113,14 @@ def main():
 
     for cls_i in good_cluster_list:
         cluster_entries = Xy[Xy[:,-1] == cls_i]
-        start_cluster = cluster_entries[0,3]
-        end_cluster = cluster_entries[-1,3]
+        start_cluster = cluster_entries[0,4]
+        end_cluster = cluster_entries[-1,4]
         alpha_cluster = cluster_entries[0,1]/10000
         L_cluster = cluster_entries[0,2]/10000
+        energy_cluster = cluster_entries[0,3]/10000
         for cls_ev in np.arange(start_cluster,end_cluster+1):
             tree_sig.GetEntry(int(cls_ev))
-            if (tree_sig.L == L_cluster) and (tree_sig.alpha == alpha_cluster):
+            if (tree_sig.L == L_cluster) and (tree_sig.alpha == alpha_cluster) and (tree_sig.energy == energy_cluster):
                 cluster_index[int(cls_ev)] = int(cluster_dict[int(cls_i)])
 
     file_root.Close()

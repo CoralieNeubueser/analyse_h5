@@ -19,12 +19,12 @@ parser.add_argument('--data', type=str, choices=['hepd','hepp_l_channel_narrow',
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 parser.add_argument('--threshold', type=int, default=100, help='Pick a number as minimum statistic in histograms.')
 parser.add_argument('--drawHistos', action='store_true', help='Tell if histograms should be drawn.')
-parser.add_argument('--fit', action='store_true', help='Use an exponential function to fit the distributions.')
-parser.add_argument('--fitFunction', type=str, default='Exp', choices=['Exp','Poisson'], help='Define wich function to use for fitting of distributions.')
+#parser.add_argument('--fit', action='store_true', help='Use an exponential function to fit the distributions.')
+#parser.add_argument('--fitFunction', type=str, default='Exp', choices=['Exp','Poisson'], help='Define wich function to use for fitting of distributions.')
 parser.add_argument('--day', type=int, default=None, help='Specify a day.')
 parser.add_argument('--useVersion', type=str, default='v2', help='Specify a data input version.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
-parser.add_argument('--integrateEn', action='store_true', help='Merge all fluxes over all energy bins.')
+#parser.add_argument('--integrateEn', action='store_true', help='Merge all fluxes over all energy bins.')
 parser.add_argument('--originalEnergyBins', action='store_true', help='Use original energy binning.')
 args,_=parser.parse_known_args()
 
@@ -50,168 +50,122 @@ print(len(Pbins[0:numPbin-1]), Pbins[0:numPbin-1])
 colors = [920, 843, 416, 600, 616, 432, 900, 800, 1,
           920-9, 843-9, 416-9, 600-9, 616-9, 432-9, 900-9, 800-9, 1]
 
-def poisson(x, p):
-    """Define poissonian function to fit distribution"""
-    newx = round(float(x[0])*float(p[2]),0)
-    if newx>0:
-        #return math.exp(newx*math.log(p[1]*p[2]) - math.lgamma(newx+1) - p[1]*p[2]) * p[0]
-        return p[0] * (math.pow(p[1]*p[2],int(newx))/math.factorial(int(newx))) * math.exp(-(p[1]*p[2]))
-    else:
-        #if  newx = 0 and mu = 0,  1 is returned
-        if (p[1] >= 0):
-            return p[0]*math.exp(-p[1])
-        else:
-            #return a nan for mu < 0 since it does not make sense
-            return 0
-
 # this function draws the single histograms per L-alpha cell, and determines the mean/rms etc.
 # it is called in parallel 
 def getParallelMeans(strHist):
       rootfilename = strHist[0]
       inRoot = r.TFile( rootfilename , 'read' )
+      tree = inRoot.tree
       plot = strHist[1]
       cut = strHist[2]
       opt = strHist[3]
-      tryFit = strHist[9]
-      geo = strHist[10] 
-      geomF = strHist[11]
+      geo = strHist[9] 
+      plot_divGeomF = strHist[10]
+      branch = strHist[11]
+      energyIndex = strHist[12]
+      Lindex = strHist[13]
+      # get selection of tree entries
+      #elist = r.TEntryList()
+      #tree.Draw(">>elist_"+branch, cut, "entrylist")
+      #elist = r.gDirectory.Get("elist_"+branch)
+      #tree.SetEntryList(elist)
       # draw the histogram
-      inRoot.tree.Draw(plot, cut, opt)
+      tree.Draw(plot, cut, opt)
       hist = r.gDirectory.Get(strHist[4])
+      tree.Draw(plot_divGeomF, cut, opt)
+      hist_counts_name = strHist[4].replace('hist_','hist_counts_')
+      hist_counts = r.gDirectory.Get(hist_counts_name)
+
       if not hist:
             print('Drawing didnt work...')
             return
       else:
             entr = hist.GetEntries()
-            if debug:
-                  print("Draw options: ", plot,cut,opt)
-                  print("Histogram has {} entries.".format(entr))
             # if the histogram more entries than the threshold  
             if ( entr > threshold ):
+                countEntr_noZeros = hist_counts.Integral(2, hist_counts.FindLastBinAbove(0))
+                
+                if debug:
+                    print("Draw options: ", plot,plot_divGeomF,cut,opt)
+                    print("Flux histogram has {} entries.".format(entr))
+                    print("Counts histogram has {} entries, excluding 0 bin.".format(countEntr_noZeros))
+
                 mean = hist.GetMean()
-                rms = hist.GetRMS()
-                rms_99_of_99 = -1
                 meanErr = hist.GetMeanError()
+                rms = hist.GetRMS()
                 rmsErr = hist.GetRMSError()
-                rmsErr_99_of_99 = -1
-                chi2 = 0 
-                converged = False
 
-                # fit the distribution
-                if tryFit:
-                    clone = hist.Clone("clone")
-                    maximumBin = hist.GetMaximumBin()
-                    maximum = hist.GetBinCenter(maximumBin)
-                    # use a larger RMS, that is not effected by the large number of 0s, in order to increase the fit range
-                    clone.GetXaxis().SetRange((maximumBin+1), clone.GetNbinsX())
-                    rms_without_zeros = clone.GetRMS()
-                    entr_without_zeros = clone.GetEntries()
-                    fit_range = (maximum, (maximum+3*rms_without_zeros))
-                    lastbin=hist.FindLastBinAbove(1)
-                    fit_range = (maximum, hist.GetBinCenter(lastbin))
-                    # use an exponential decay
-                    if args.fitFunction=='Exp':
-                        f1 = r.TF1("f1_"+str(strHist[4]),"[0]*exp(-x/[1])",0,hist.GetBinCenter(lastbin))
-                        f1.SetParameters(entr,rms_without_zeros)
-                        f1.SetParLimits(1, 1e-8,hist.GetBinCenter(lastbin))
-                        # use a Poissonian
-                    else:
-                        f1 = r.TF1("f1_"+str(strHist[4]), poisson, 0, hist.GetBinCenter(lastbin),3);
-                        f1.SetParameters(entr, rms_without_zeros*float(geomF), float(geomF))
-                        f1.SetParLimits(1, 0, 100)
-                        f1.FixParameter(2, float(geomF))
-                        
-                    f1.SetLineColor(colors[strHist[8]])
+                mean_counts = hist_counts.GetMean()
+                meanErr_counts = hist_counts.GetMeanError()
+                
+                # Set range for rms calculation, ecluding 0 counts
+                maximumBin = hist_counts.GetBinCenter(hist_counts.FindLastBinAbove(0))
+                hist_counts_trunc = hist_counts.Clone('{}_maxX_{}'.format(hist_counts_name,str(maximumBin))) 
+                hist_counts_trunc.GetXaxis().SetRange(2, hist_counts.FindLastBinAbove(0))
+                #hist_counts.GetXaxis().SetRange(0, hist_counts.FindLastBinAbove(0))
+                rms_counts = hist_counts_trunc.GetRMS()
+                rmsErr_counts = hist_counts_trunc.GetRMSError()
 
-                    # first fitting in maximum range
-                    fresults = hist.Fit(f1,"RSQ")
-                    mean = hist.GetMean()
-                    tau = rms
-                    tauErr = rmsErr
-                    chi2 = 1000
-                    failed = True
-
-                    # if fit worked
-                    if fresults.Ndf()!=0 and fresults.IsValid():
-                        chi2 = fresults.Chi2()/fresults.Ndf()
-                        failed = False
-                        useFirst = True
-                        print("First tau: ", fresults.GetParams()[1])
-
-                    # if the fit didn't work or the chi2 too high, try again..
-                    if chi2>10 or failed:
-                        fitstart=hist.GetMaximumBin()
-                        trial = 0
-                        while trial<10:
-                            trialbin=trial
-                            # make sure only fits across 50% of entries is performed
-                            if hist.Integral(trial,lastbin)/hist.GetEntries()<0.5:
-                                if debug:
-                                    print("Entries in fit range: ", hist.Integral(trial,lastbin))
-                                    print("Less than 50%, it will not be continued: ", hist.Integral(trial,lastbin)/hist.GetEntries())
-                                break
-
-                            fres = hist.Fit(f1,"SQ","",hist.GetBinCenter(trialbin),hist.GetBinCenter(lastbin))
-                            # if fit converged
-                            if fres.IsValid() and fres.Ndf()!=0:
-                                # check chi2.. 
-                                if fres.Chi2()/fres.Ndf() < chi2:
-                                    chi2 = fres.Chi2()/fres.Ndf()
-                                    fitstart = trialbin
-                                    failed = False
-                                    useFirst = False
-                            trial+=1
-                        print('Finished after {} trials.'.format(trial))
-                    
-                    if not failed and not useFirst:
-                        # add last fit with optimised fit range    
-                        fresults = hist.Fit(f1,"SQ","",hist.GetBinCenter(fitstart),hist.GetBinCenter(lastbin))
-
-                    if not failed:
-                        converged = True
-                        tau = fresults.GetParams()[1]
-                        print("used tau: ",tau)
-                        print("fit results with chi2: ",fresults.Chi2()/fresults.Ndf())
-                    else:
-                        # if the fit did not converge with good chi2, remove from the histogram
-                        hist.RecursiveRemove( hist.FindObject("f1_"+str(strHist[4])) )
-
-                    rms = tau
-                    rmsErr = tauErr
-
-                else:  
-                    # test a RMS99 implementation, adding a 99.99% threshold estimate
-                    content=0
-                    mbin=0
-                    mbin_99_of_99=0
-                    for ibin in range(hist.GetNbinsX()):
-                        content+=hist.GetBinContent(ibin)
-                        if content/entr<0.99:
+                # test a RMS99 implementation, adding a 99.99% threshold estimate
+                content=0
+                mbin=0
+                mbin_99_of_99=0
+                if countEntr_noZeros>0:
+                    # skip 1 bin
+                    for ibin in range(2, hist_counts.GetNbinsX()):
+                        content+=hist_counts.GetBinContent(ibin)
+                        if content/countEntr_noZeros<0.99:
                             mbin=ibin
-                        elif content/entr<0.9999:
+                        elif content/countEntr_noZeros<0.9999:
                             mbin_99_of_99=ibin
                         else:
                             break
-                    rms = hist.GetBinCenter(mbin)+hist.GetBinWidth(mbin)/2.
-                    rmsErr = hist.GetBinWidth(mbin)/2.
-                    rms_99_of_99 = hist.GetBinCenter(mbin_99_of_99)+hist.GetBinWidth(mbin_99_of_99)/2.
-                    rmsErr_99_of_99 = hist.GetBinWidth(mbin_99_of_99)/2.
 
-                    if rms==0:
-                        rms = rmsErr
-                    if rms_99_of_99==0:
-                        rms_99_of_99 = rmsErr_99_of_99
+                rms99 = hist_counts.GetBinCenter(mbin) + hist_counts.GetBinWidth(mbin)/2.
+                rmsErr99 = hist_counts.GetBinWidth(mbin)/2.
+                rms99_of_99 = hist_counts.GetBinCenter(mbin_99_of_99) + hist_counts.GetBinWidth(mbin_99_of_99)/2.
+                rmsErr99_of_99 = hist_counts.GetBinWidth(mbin_99_of_99)/2.
+
+                if rms99==0:
+                    rms99 = rmsErr99
+                if rms99_of_99==0:
+                    rms99_of_99 = rmsErr99_of_99
+
+                # detemine weight=rms/rms_99
+                # set range of histogram
+                hist_counts_rms99 = hist_counts.Clone('{}_maxX_{}_noZeros'.format(hist_counts_name,str(maximumBin)))
+                hist_counts_rms99.GetXaxis().SetRange(2, mbin)
+                rms_counts_99 = hist_counts_rms99.GetRMS()
+                weight = 1
+                if rms_counts_99!=0:
+                    weight = rms_counts/rms_counts_99
 
                 # write mean etc. into txt file
                 with open(strHist[6], 'a') as txtFile:
-                    line = strHist[5]+'{} {:.8f} {:.8f} {:.8f} {:.8f} {:8f} {:8f} {:.1f} {} {:.3f}\n'.format(hist.GetEntries(), mean, meanErr, rms, rmsErr, rms_99_of_99, rmsErr_99_of_99, chi2, int(converged==True), geo)
+                    line = strHist[5]+'{} {:.8f} {:.8f} {:.8f} {:.8f} {:.8f} {:.8f} {:.1f} {:.1f} {:.1f} {:.1f} {:.2f} {:.3f}\n'.format(hist.GetEntries(), mean, meanErr, rms, rmsErr, mean_counts, meanErr_counts, rms99, rmsErr99, rms99_of_99, rmsErr99_of_99, weight, geo)
                     txtFile.writelines(line)
-                # prepare the histogram for drawing and add to list
-                hist.SetName(strHist[4]) 
-                hist.SetLineColor(colors[strHist[8]])
-                hist.SetLineWidth(2)
-                strHist[7].append(hist)
+            
+                plotName = hist_counts_name 
 
+                # prepare the histogram for drawing and add to list
+                hist.SetNameTitle('{0}_maxX_{1} full'.format(plotName,maximumBin), '{0}_maxX_{1} full'.format(plotName,maximumBin)) 
+                hist_counts.SetLineColor(colors[strHist[8]])
+                hist_counts.SetLineWidth(1)
+                hist_counts.SetLineStyle(7)
+                hist_counts_trunc.SetNameTitle('{0}_maxX_{1} trunc'.format(plotName,maximumBin), '{0}_maxX_{1} trunc'.format(plotName,maximumBin))
+                hist_counts_trunc.SetLineColor(colors[strHist[8]])
+                hist_counts_trunc.SetLineWidth(2)
+                hist_counts_trunc.SetLineStyle(2) 
+                hist_counts_rms99.SetNameTitle('{0}_maxX_{1} rms99'.format(plotName,maximumBin), '{0}_maxX_{1} rms99'.format(plotName,maximumBin))
+                hist_counts_rms99.SetLineColor(colors[strHist[8]])
+                hist_counts_rms99.SetLineStyle(1)
+                hist_counts_rms99.SetLineWidth(3)
+                
+                if args.drawHistos:
+                    strHist[7].append(hist_counts)
+                    strHist[7].append(hist_counts_trunc)
+                    strHist[7].append(hist_counts_rms99)
+                
 filename = args.inputFile
 # read tree                
 inRoot = r.TFile( filename , 'read' )
@@ -223,32 +177,32 @@ else:
 print("To test days: ", lst)
 
 en_bins, energies, en_max = 1, [0.], 0.
-if args.integrateEn==False:
-    en_bins, energies, en_max = getEnergyBins(det, rebin)
-    print(energies)
-    # test if pre-defined energy values are the same as in the root tree
-    # important for the energy selection!
-    test_energies = set()
-    for ev in inRoot.tree:
-        if len(test_energies) < en_bins:
-            for e in ev.energy:
-                test_energies.add(e)
-        else:
-            break
-    test_energies = sorted(test_energies, key=float)
-    if energies!=test_energies:
-        energies=test_energies
-    print("For energies: ", energies)
+en_bins, energies, en_max = getEnergyBins(det, rebin)
+print(energies)
+# test if pre-defined energy values are the same as in the root tree
+# important for the energy selection!
+test_energies = set()
+for ev in inRoot.tree:
+    if len(test_energies) < en_bins:
+        for e in ev.energy:
+            test_energies.add(e)
+    else:
+        break
+test_energies = sorted(test_energies, key=float)
+if energies!=test_energies:
+    energies=test_energies
+print("For energies: ", energies)
 
 flux_bins, flux_binWidth = getFluxBins(det)
+count_bins = getCountsBins(det)
 
-outFilePath = sharedOutPath()+'/data/averages/'+args.useVersion+'/'+str(args.data)+'/'
+outFilePath = '{0}/data/averages/{1}/{2}/'.format(sharedOutPath(),args.useVersion,args.data)
 if args.integral:
-    outFilePath = sharedOutPath()+'/data/averages/'+args.useVersion+'/'+str(args.data)+'/'+str(args.integral)+'s/'
-if args.integrateEn:
-    outFilePath += 'integratedEnergies/' 
-if args.fit:
-      outFilePath += 'fitted'+args.fitFunction+'/'
+    outFilePath = '{0}/data/averages/{1}/{2}/{3}s/'.format(sharedOutPath(), args.useVersion, args.data, args.integral)
+#if args.integrateEn:
+#    outFilePath += 'integratedEnergies/' 
+#if args.fit:
+#      outFilePath += 'fitted'+args.fitFunction+'/'
 if args.originalEnergyBins:
     outFilePath += 'originalEnergyBins/'
 if not os.path.exists(outFilePath):
@@ -263,17 +217,18 @@ for d in lst:
       # list of commands to be run in parallel
       commands = []
       # list of histograms filled in parallel
-      th1ds = Manager().list() 
+      th1ds = Manager().list()
       # stacks and legends to be used for the --drawHistos option
       thstacks = [[r.THStack()] * len(Lbins[0:numLbin-1]) for x in range(len(energies))]
       tlegends = [[r.TLegend()] * len(Lbins[0:numLbin-1]) for x in range(len(energies))]
+      maxxs = [[0] * len(Lbins[0:numLbin-1]) for x in range(len(energies))]
       # write averages for all L-p cells / day 
-      outFileName = outFilePath+str(d)+'_min_'+str(threshold)+'ev.txt'
+      outFileName = '{0}{1}_min_{2}ev.txt'.format(outFilePath,d,threshold)
       # get average geomagnetic index of this day
       meanGeomIndex = getGeomIndex(data, d)
       print("Write averages in: ", outFileName)
       outFile = open(outFileName, 'w')
-      outFile.write('energy L pitch entries mean meanErr rms rmsErr rms99_of_99 rmsErr99_of_99 chi2 fit avGeomIndex\n')
+      outFile.write('energy L pitch entries mean meanErr rms rmsErr mean_counts meanErr_counts rms99 rmsErr99 rms99_of_99 rmsErr99_of_99 weight avGeomIndex\n')
       outFile.close()
       count = 0
       
@@ -284,47 +239,59 @@ for d in lst:
             geomFactor = getGeomFactor(args.data,ien)
 
             for iL,L in enumerate(Lbins[0:numLbin-1]):
-                  tlegends[ien][iL] = r.TLegend(0.6,0.5,0.9,.9, 'threshold = '+str(threshold)+' entries')
-                  thstacks[ien][iL] = r.THStack('stack_'+str(en)+'_'+str(L), 'stack_'+str(en)+'_'+str(L)) 
-
+                  tlegends[ien][iL] = r.TLegend(0.6,0.5,0.9,.9, 'threshold = {} entries'.format(threshold))
+                  thstacks[ien][iL] = r.THStack('stack_{0}_{1}'.format(en,L), 'stack_{0}_{1}'.format(en,L)) 
+                  
                   for iP,P in enumerate(Pbins[0:numPbin-1]):
                         writeOut = str('{} {} {} '.format(round(en,1), L, P))
-                        histName = 'hist_day_'+str(d)+'_energy_'+str(en)+'_L_'+str(L)+'_p_'+str(P)
-                        if args.integrateEn:
-                            lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'('+str(flux_bins)+',0,'+str(flux_bins*flux_binWidth)+')'), 'field>25000 && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit, meanGeomIndex, geomFactor ]
-                        else:
-                            lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)), 'field>25000 && energy_'+str(L)+'_'+str(P)+'=='+str(en)+' && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit, meanGeomIndex, geomFactor ]
-                            #lst_comm = [ filename, str('flux_'+str(L)+'_'+str(P)+'>>'+str(histName)+'('+str(flux_bins)+',0,'+str(flux_bins*flux_binWidth)+')'), 'field>25000 && energy_'+str(L)+'_'+str(P)+'=='+str(en)+' && day=='+str(d), 'goff', histName, writeOut, outFileName, th1ds, iP, args.fit, meanGeomIndex, geomFactor ]
+                        histName = 'hist_day_{0}_energy_{1}_L_{2}_p_{3}'.format(d,en,L,P) 
+                        histNameCounts = 'hist_counts_day_{0}_energy_{1}_L_{2}_p_{3}'.format(d,en,L,P)
+                        lst_comm = [ filename, 'flux_{0}_{1}>>{2}'.format(L,P,histName), 'field>25000 && day=={0} && energy_{1}_{2}=={3}'.format(d,L,P,en), 'goff', histName, writeOut, outFileName, th1ds, iP, meanGeomIndex, str('flux_{0}_{1}*{2}>>{3}({4},0,{4})').format(L,P,geomFactor,histNameCounts,count_bins), '{0}_{1}_{2}_{3}'.format(d,L,P,en), ien, iL ]
+
                         commands.append(lst_comm)
                         count += 1
 
-                        if debug and count > 0:
+                        if debug and count>5:
                             break
+            
+                  if debug and count>5:
+                      break
+            if debug and count>5:
+                break
 
       print('Run through {} energy X pitch x L bins.'.format(count))
-      pool = Pool(processes=10) # Generally, set to 2*num_cores you have
+      pool = Pool(processes=8) # Generally, set to 2*num_cores you have
       # run in parallel
       pool.map( getParallelMeans, commands) 
       pool.close()
       pool.join()
-      print("Got {} histograms.. efficiency with thr={} of {:.2f}".format(len(th1ds), args.threshold, len(th1ds)/count*100))
-
+      print("Got {} histograms.. efficiency with thr={} of {:.2f}".format(len(th1ds)/3, threshold, len(th1ds)/3/count*100))
+      
       if args.drawHistos:
-            if args.fit:
-                  r.gStyle.SetOptStat(1111)
+            # write root file with histograms
+            rootOutFileName = outFileName.replace('txt','root')
+            outrootfile = r.TFile.Open(rootOutFileName, "RECREATE")
             # loop through list of histograms
-            for h in th1ds:
+            for ih,h in enumerate(th1ds):
                   name = h.GetName()
+                  print(name)
                   energyValue = float(re.findall(r"[+-]?\d+\.\d+", name)[0])
                   lValue = float(re.findall(r"[+-]?\d+\.\d+", name)[1])
                   pValue = int(re.findall(r'\d+', name)[5])
+                  maxValue = 500
+                  if len((re.findall(r'[+-]?\d+\.\d+', name)))>2:
+                      maxValue = float(re.findall(r'[+-]?\d+\.\d+', name)[2])
+                  label = name[-5:]
                   # find index of energy and L
                   energyIndex = energies.index(energyValue)
                   lIndex = Lbins.index(lValue)
                   # fill hist in corresponding stacks
-                  tlegends[energyIndex][lIndex].AddEntry(h, 'L='+str(lValue)+', #alpha_{eq}='+str(pValue), 'l')
+                  tlegends[energyIndex][lIndex].AddEntry(h, 'L='+str(lValue)+', #alpha_{eq}='+str(pValue)+', '+label, 'l')
                   thstacks[energyIndex][lIndex].Add(h)
-                  
+                  if maxxs[energyIndex][lIndex] < maxValue:
+                      maxxs[energyIndex][lIndex] = maxValue
+                  h.Write()
+
             print('legend E entries: ',len(tlegends))
             print('legend L entries: ',len(tlegends[0]))
 
@@ -335,24 +302,24 @@ for d in lst:
                         if not st.GetNhists()>0:
                               continue
                         else:
-                              can = r.TCanvas()
+                              can = r.TCanvas('Energy={0}, L={1}-{2}'.format(energies[iest],Lbins[ifinal],Lbins[ifinal+1]) )
                               can.SetLogy()
                               st.Draw("nostack, histe")
                               st.Draw("nostack, f same")
-                              st.GetXaxis().SetTitle('flux [counts/(s#upoint cm^{2}#upoint sr)]')
+                              st.GetXaxis().SetTitle('counts [1/s]')
                               st.GetYaxis().SetTitle('# entries')
                               st.SetMinimum(1)
-                              st.GetXaxis().SetLimits(0,500) #(st.GetHistogram().GetMean()+3*st.GetHistogram().GetRMS()))
+                              st.GetXaxis().SetLimits(0, maxxs[iest][ifinal])
                               tlegends[iest][ifinal].Draw()
                               can.Modified()
-                              head, tail = os.path.split( filename.replace('root','pdf').replace('all', 'day_'+str(d)+'_energy_'+str(energies[iest])+'_L_'+str(Lbins[ifinal])) )
-                              tail = 'day_'+str(d)+'_energy_'+str(energies[iest])+'_L_'+str(Lbins[ifinal])+'.pdf'
-                              if args.fit:
-                                    head = head+'/fitted'+args.fitFunction+'/'
-                              if args.threshold!=100:
-                                    head = head+'/'+str(args.threshold)+'ev/'
+                              head, tail = os.path.split( filename.replace('root','pdf').replace('all', 'day_{0}_energy_{1}_L_{2}'.format(d, energies[iest], Lbins[ifinal])) )
+                              tail = 'day_{0}_energy_{1}_L_{2}.pdf'.format(d, energies[iest], Lbins[ifinal])
+                              if threshold!=100:
+                                    head = '{0}/{1}ev/'.format(head,threshold)
                               if not os.path.exists(head):
                                     os.makedirs(head)
 
-                              outCurves = head+'/'+tail
-                              can.Print(outCurves)
+                              outCurves = '{}/{}'.format(head,tail)
+                              #can.Print(outCurves)
+                              can.Write()
+            outrootfile.Close()    

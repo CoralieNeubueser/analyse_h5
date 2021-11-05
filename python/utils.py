@@ -6,6 +6,7 @@ import ROOT as r
 import h5py
 from collections import defaultdict
 from drawFunctions import *
+import pandas as pd
 
 
 path_to_INIT = '/opt/exp_software/limadou/set_env_standalone.sh'
@@ -440,6 +441,14 @@ def getFluxBins(det):
     else:
         return 1000, 0.05
 
+def getCountsBins(det):
+    if det=='hepd':
+        return 50
+    elif det=='hepp_l':
+        return 1000000
+    else:
+        return 1000
+
 # return a list of days
 def getDays(tree):
     lst_days = set()
@@ -447,6 +456,22 @@ def getDays(tree):
     for ev in tree:
         lst_days.add(ev.day)
     return lst_days
+
+# read in daily averages, rms99, and rms99_of_99
+# return list of dict
+def readAverageFile(fileName,storedEn):
+
+    av_Lalpha = [ {} for en in storedEn]
+    file = open(fileName, "r")
+    next(file)
+    for line in file:
+        columns = [float(i) for i in line.split()]
+        col_energy = columns[0]
+        energyStored = col_energy
+        en_index = storedEn.index( energyStored )
+        # fill dictionary from (L, alpha) -> (mean, rms99, rms99Err, rms99_of_99, rmsErr_99_of_99, weight)
+        av_Lalpha[en_index].update( {( columns[1],int(columns[2]) ):( columns[4],columns[10],columns[11],columns[12],columns[13],columns[14] )} )
+    return av_Lalpha
 
 # helper to merge not only root tree, but the 2D histograms in a file as well
 # specify if neede with bool 'allHists'
@@ -671,6 +696,7 @@ def SubmitListToCondor(args, irun=1):
     fsub.write('log                   = %s/log/job.%s.$(ClusterId).log\n'%(logdir,str(irun)))
     fsub.write('error                 = %s/err/job.%s.$(ClusterId).$(ProcId).err\n'%(logdir,str(irun)))
     fsub.write('RequestCpus = 4\n')
+    #fsub.write('Request_Memory = 32 Mb')
     fsub.write('+JobFlavour = "longlunch"\n')
     fsub.write("queue executable,seed from %s" % os.path.join(logdir, "arguments.txt"))    
     fsub.close()
@@ -715,12 +741,16 @@ def readIGRF(day):
 
 def getGeomIndex(dic, day):
     ###
-    allGeomIndices = []
-    for line in dic:
-        if line[0] == day:
-            allGeomIndices.append(dic[line])
+    print(str(day)[0:4])
+    if int(str(day)[0:4])>2020:
+        return -1
+    else:
+        allGeomIndices = []
+        for line in dic:
+            if line[0] == day:
+                allGeomIndices.append(dic[line])
     
-    return np.mean(np.array(allGeomIndices))
+        return np.mean(np.array(allGeomIndices))
 
 def getAlphaLindex(alpha_v, L_v):
     # find corresponding L/alpha bin, and use the average Lshell and alpha values                                                  
@@ -735,3 +765,11 @@ def getAlphaLindex(alpha_v, L_v):
             Albin=ia
             break
     return ia,il
+
+## read-in of list of days with EQs
+def readEQfile():
+    df = pd.read_csv('{}/data/earthquakes_2019_2021.csv'.format(sharedOutPath()), usecols=['time','latitude','longitude'], sep=';') # names=['time','latitude','longitude','depth','mag','magType','nst','gap','dmin','rms','net','id','updated','place','type','horizontalError','depthError','magError','magNst','status','locationSource','magSource']
+    months = np.unique([int(m[:7].replace('-','')) for m in df.time])
+    days = [int(day[:10].replace('-','')) for day in df.time]
+    daytimes = [int(t[11:13])+int(t[14:16])/60 for t in df.time]
+    return months, days, daytimes 

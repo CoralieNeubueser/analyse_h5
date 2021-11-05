@@ -2,22 +2,35 @@ import os, sys, argparse, re, glob
 from utils import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--numRuns', type=int, help='Define number of runs to be analysed.', required=True)
+### DEFINE WHICH DETECTOR TO USE
 parser.add_argument('--hepd', action='store_true', help='Analyse HEPD data.')
 parser.add_argument('--hepp_l', action='store_true', help='Analyse HEPP-L data.')
 parser.add_argument('--hepp_h', action='store_true', help='Analyse HEPP-H data.')
 parser.add_argument('--channel', type=str, required= '--hepp_l' in sys.argv,  choices=['narrow','wide'], help='Choose narrow or wide channels to be read.')
-parser.add_argument('--originalE', action='store_true', help='Use fine energy binning.')
+### ACTIONS
+### defaults action reads h5 and writes out root files
+parser.add_argument('--numRuns', type=int, help='Define number of runs to be analysed.', required=True)
+parser.add_argument('--EQlist', action='store_true', help='Run analysis on specific days, defined by list of EQs (2019-2021).')
 parser.add_argument('--clean', action='store_true', help='Clean up HEPP files of overlapping orbits.')
+parser.add_argument('--merge', action='store_true', help='Merge all runs, per month and writes out RMS99 threshold.')
+parser.add_argument('--select', action='store_true', help='Select 1% highest fluxes, writes out new root file.')
+parser.add_argument('--ana', action='store_true', help='Analyse all runs.')
+parser.add_argument('--cluster', action='store_true', help='Run clustering on 1% highest fluxes.')
+parser.add_argument('--cut', type=str, default='99perc', choices=['99perc','weights','z_score_more2','z_score_more3','dummy_cut'], help='Define the cut type.')
+parser.add_argument('--window',type=int, default=10, help='Define window length in s.')
+parser.add_argument('--seeds', type=int, default=4, help='Define numer of seeds necessary to build cluster.')
+
+### OPTIONS
+parser.add_argument('--originalE', action='store_true', help='Use fine energy binning.')
 parser.add_argument('--fit', action='store_true', help='Fit flux distributions with exponential.')
-parser.add_argument('--merge', action='store_true', help='Merge all runs.')
-parser.add_argument('--select', action='store_true', help='Merge all runs.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
+parser.add_argument('--draw', action='store_true', help='Allows to write out root file with distributions that were used to extract averages, and RMS99.')
+parser.add_argument('--allHists', action='store_true', help='Merge all runs, including the histograms.')
+parser.add_argument('--test', action='store_true', help='Analyse test runs.')
+### define specific period to run over
 parser.add_argument('--day', type=int, required=False, help='Merge orbits of a specific day [yyyymmdd].')
 parser.add_argument('--month', type=int, default=201903, help='Merge orbits of a specific month [yyyymm].')
-parser.add_argument('--allHists', action='store_true', help='Merge all runs, including the histograms.')
-parser.add_argument('--ana', action='store_true', help='Analyse all runs.')
-parser.add_argument('--test', action='store_true', help='Analyse test runs.')
+
 parser.add_argument('--useVersion', type=str, default='v2', help='Define wether flux=0 is stored.')
 parser.add_argument('--submit', action='store_true', help='Submit to HTCondor batch farm.')
 parser.add_argument('-q','--quiet', action='store_true', help='Run without printouts.')
@@ -26,10 +39,12 @@ args,_=parser.parse_known_args()
 runs = args.numRuns
 os.system('source /opt/exp_software/limadou/set_env_standalone.sh')
 
+if args.EQlist:
+    readEQlist()
+
 det = 'hepd'
 datapaths = []
 if args.hepd:
-    #datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*.h5')
     # run all orbits in August 2018
     datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*'+str(args.month)+'*.h5')
     if args.day:
@@ -45,7 +60,6 @@ elif args.hepp_l:
     det = 'hepp_l_channel_'+args.channel
     # get HEPP data of quiet period 1.-5.08.2018
     datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*_'+str(args.month)+'*.h5') #('/storage/gpfs_data/limadou/data/flight_data/analysis/data/h5/HEPP_august_2018/*.h5')
-    # ('/home/LIMADOU/cneubueser/public/HEPP_august_2018/*.h5')
     if args.day:
         datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*_'+str(args.day)+'*.h5')
     # select HEPP data from 22-26.02.2019 (solar quiet period) 
@@ -57,7 +71,7 @@ elif args.hepp_l:
 elif args.hepp_h:
     det = 'hepp_h'
     # get HEPP data of quiet period 1.-5.08.2018
-    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*'+str(args.month)+'*.h5') #('/storage/gpfs_data/limadou/data/flight_data/analysis/data/h5/HEPP_august_2018/*.h5')
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*'+str(args.month)+'*.h5')
     if args.day:
         datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*'+str(args.day)+'*.h5')
 # sort files by time
@@ -65,8 +79,9 @@ datapaths.sort(key=os.path.getmtime)
 
 # define the submission file for condor
 args_file = open(home()+'/log/arguments.txt', "w")
+
 # run on single semi-orbits
-if not args.merge and not args.ana and not args.select and not args.clean:
+if not args.merge and not args.ana and not args.select and not args.clean and not args.cluster:
     
     if len(datapaths) < runs:
         print("Only {} files available for reading. ".format(len(datapaths)))
@@ -216,10 +231,7 @@ elif args.merge and not args.test:
             findOld = glob.glob(pathToFind+'all_'+det+'_'+str(args.day)+'*.root')
             runs = len(runList)
         
-
-    #print(runs)
     oldruns=0
-    #print(findOld)
     if len(findOld)>0:
         for old in findOld:
             head, tail = os.path.split(old)
@@ -238,11 +250,11 @@ elif args.merge and not args.test:
     #for ifile in runList:
     #    cmd += ifile+' '
     #cmd += '\n'
-    cmd = 'python3 python/writeDayAverages.py --drawHistos --useVersion '+args.useVersion+' --inputFile '+mge+' --data '+det+' '
+    cmd = 'python3 python/writeDayAverages.py --useVersion '+args.useVersion+' --inputFile '+mge+' --data '+det+' '
     if args.originalE:
         cmd += '--originalEnergyBins '
-    if args.fit:
-        cmd += '--fit ' 
+    if args.draw:
+        cmd += '--drawHistos '
     if args.day:
         cmd += '--day '+str(args.day)
         if args.submit:
@@ -250,7 +262,6 @@ elif args.merge and not args.test:
         else:
             os.system(cmd)
     
-        
 
 elif args.merge and args.test:
 
@@ -260,16 +271,10 @@ elif args.merge and args.test:
         if args.day:
             mge = sharedOutPath()+"data/root/"+args.useVersion+"/L3_test/"+t+'/all_'+str(args.day)+'.root'
             runList = sorted( glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/L3_test/'+t+'/CSES_*'+str(args.day)+'*.root'), key=lambda x:float(x[-10:-4]))
-        #runList = sorted( glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/L3_test/'+t+'/CSES_*.root'), key=lambda x:float(x[-10:-4]))
         runs = len(runList)
-        #print(runList)
         if runs>0:
             print("Merge files in: ", mge)
             merge(mge, runList, runs, args.allHists)
-            #cmd  = 'hadd -f -k '+mge+' '
-            #for ifile in runList:
-            #    cmd += ifile+' '
-            #    cmd += '\n'
  
         cmd = 'python3 python/writeDayAverages.py --drawHistos --inputFile '+mge
         if args.hepd:
@@ -289,20 +294,18 @@ elif args.select:
     if args.test:
         detPath = 'L3_test/L3_repro'
         fileSnip = 'all_'
-    if args.month:
+    if not args.day:
         for iday in range(1,32):
             strday = str(iday)
             if iday < 10:
                 strday = '0'+str(iday)
             print( sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/'+fileSnip+str(args.month)+strday+'*.root' )
             found = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/'+fileSnip+str(args.month)+strday+'*.root')
-            #print(found)
             for every in found:
                 findFile.append( every )
     elif args.day:
         findFile = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/'+fileSnip+str(args.day)+'*.root')
 
-    #print(findFile)
     for ind,foundFile in enumerate(findFile):
         ind+=1
         strDay = str(ind)
@@ -328,6 +331,87 @@ elif args.select:
     args_file.close()
     if args.submit:
         SubmitListToCondor(args_file)
+
+elif args.cluster:
+
+    findFile = []
+    detPath = det
+    fileSnip = 'all_highFluxes_'+det+'_'
+    thresholdDir = sharedOutPath()+'data/thresholds/'+args.useVersion+'/'+detPath+'/'
+    thresholdFile = thresholdDir+'thresholds_'+str(args.month)+'.pkl'
+    clusterInput = ''
+    cmdTot=''
+
+    if not args.day:
+        for iday in range(1,32):
+            strday = str(iday)
+            if iday < 10:
+                strday = '0'+str(iday)
+            found = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/'+fileSnip+str(args.month)+strday+'*.root')
+            for every in found:
+                findFile.append( every )
+    else:
+        findFile = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/'+fileSnip+str(args.day)+'*.root')
+        thresholdFile = thresholdDir+'thresholds_'+str(args.day)+'.pkl'
+        clusterInput = findFile[0]
+
+    # 1. write thresholds 
+    # check if directory exists
+    if not os.path.exists( thresholdDir ):
+        print("Directory is created: ", thresholdDir)
+        os.makedirs( thresholdDir )
+    # check if threshold file already exists, if so, skip this step
+    if os.path.isfile( thresholdFile ):
+        print("Files with thresholds already exists. ")
+    # do nothing if 99.99% threshold is used for seeds in clusters 
+    elif args.cut=='99perc' or args.cut=='weights' or args.cut=='dummy_cut':
+        print("Use in tree stored rms99of99, of weights as thresholds.")
+    # determine thresholds..
+    else:
+        cmd = 'python3 python/threshold_estimation.py --INFILES '
+        for ifile in findFile:
+            cmd += ifile+' '
+        cmd += ' --OUTDIR '+thresholdDir+' --OUTFILE '+os.path.basename(thresholdFile)+' --PLOTON 1\n'
+        cmdTot=cmd
+
+    # 2. merge into month
+    if not args.day:
+        mge = sharedOutPath()+"data/root/"+args.useVersion+'/'+detPath+'/'+fileSnip+str(args.month)+'.root'
+        clusterInput = mge
+        if not os.path.isfile( mge ):
+            os.system('hadd -f -k '+mge+' '+str(findFile).replace(']','').replace('[','').replace(',',' '))
+
+    # 3. run clustering
+    alreadyDone=False
+    clusterOutdir = sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/clustered_inEnergy/'+args.cut+'/'+str(args.window)+'s_window/'+str(args.seeds)+'_seeds/'
+    if not os.path.exists( clusterOutdir ):
+        print("Directory is created: ", clusterOutdir)
+        os.makedirs( clusterOutdir )
+    elif os.path.isfile( clusterOutdir+os.path.basename(clusterInput) ):
+        print('Clustering already done, use different parameters!')
+        alreadyDone=True
+
+    if not alreadyDone:
+        os.system('cp '+clusterInput+' '+clusterOutdir)   
+
+        cmd2 = 'python3 python/cluster_finding.py --IN '+clusterOutdir+os.path.basename(clusterInput)+' --OUT ./ --CUT '+args.cut+' --CUTfile '+thresholdFile+' --WINDOW '+str(args.window)+' --MINNSEED '+str(args.seeds)
+    
+        cmdTot += cmd2
+        print(cmdTot)
+
+        # submit to Condor 
+        if args.submit:
+            exefilename = 'job_cluster_%s_%s_%s_%s.sh'%(os.path.basename(clusterInput),args.cut,str(args.window),str(args.seeds))
+            exefile = writeExecutionFile(home()+'/log/'+exefilename, cmdTot)
+            print("Write execution file to:", exefilename)
+            args_file.write("%s\n"%(home()+'/log/'+exefilename))
+            args_file.close()
+        
+            SubmitListToCondor(args_file)
+        # or run locally
+        else:
+            os.system(cmdTot)
+
 
 if args.clean:
 

@@ -72,6 +72,8 @@ def getEnergyBins(det, rebinned):
     if det=='hepd':
         # original upper bin edges: [[ 4. 8.96811 10.9642  13.4045  16.388   20.0355  24.4949  29.9468  36.6122  44.7611  54.7237  66.9037 ]]
         return 12, [2.0, 6.5, 10.0, 12.2, 14.9, 18.2, 22.3, 27.2, 33.3, 40.7, 49.7, 60.8], 66.9
+    elif det=='noaa':
+        return 4, [0.04, 0.13, 0.287, 0.612], 0.612
     elif det=='hepp_l' and rebinned:
         return 16, [0.1, 0.28125, 0.4625, 0.64375, 0.825, 1.00625, 1.1875, 1.36875, 1.55, 1.73125, 1.9125, 2.09375, 2.275, 2.45625, 2.6375, 2.81875], 3
     elif det=='hepp_l' and not rebinned:
@@ -597,6 +599,7 @@ def getAlpha_eq(iAlpha, iB, iBeq):
         return 999
 
     else:
+        #print(iBeq, iB)
         if iAlpha<=90:
             alpha_eq = np.arcsin( np.sin( iAlpha_rad ) * np.sqrt(iBeq/iB) )
         else:

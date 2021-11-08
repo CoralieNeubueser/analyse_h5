@@ -6,6 +6,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--hepd', action='store_true', help='Analyse HEPD data.')
 parser.add_argument('--hepp_l', action='store_true', help='Analyse HEPP-L data.')
 parser.add_argument('--hepp_h', action='store_true', help='Analyse HEPP-H data.')
+parser.add_argument('--noaa', action='store_true', help='Analyse NOAA data.')
 parser.add_argument('--channel', type=str, required= '--hepp_l' in sys.argv,  choices=['narrow','wide'], help='Choose narrow or wide channels to be read.')
 ### ACTIONS
 ### defaults action reads h5 and writes out root files
@@ -28,8 +29,8 @@ parser.add_argument('--draw', action='store_true', help='Allows to write out roo
 parser.add_argument('--allHists', action='store_true', help='Merge all runs, including the histograms.')
 parser.add_argument('--test', action='store_true', help='Analyse test runs.')
 ### define specific period to run over
-parser.add_argument('--day', type=int, required=False, help='Merge orbits of a specific day [yyyymmdd].')
-parser.add_argument('--month', type=int, default=201903, help='Merge orbits of a specific month [yyyymm].')
+parser.add_argument('--day', type=int, nargs='+', required=False, help='Merge orbits of a specific day [yyyymmdd].')
+parser.add_argument('--month', type=int, required=False, help='Merge orbits of a specific month [yyyymm].')
 
 parser.add_argument('--useVersion', type=str, default='v2', help='Define wether flux=0 is stored.')
 parser.add_argument('--submit', action='store_true', help='Submit to HTCondor batch farm.')
@@ -48,7 +49,8 @@ if args.hepd:
     # run all orbits in August 2018
     datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*'+str(args.month)+'*.h5')
     if args.day:
-        datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*'+str(args.day)+'*.h5')
+        for d in args.day:
+            datapaths += glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*'+str(d)+'*.h5')
     if args.test:
         #datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3h5_orig/*.h5')
         #datapaths += glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3h5_rate/*.h5')
@@ -61,7 +63,8 @@ elif args.hepp_l:
     # get HEPP data of quiet period 1.-5.08.2018
     datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*_'+str(args.month)+'*.h5') #('/storage/gpfs_data/limadou/data/flight_data/analysis/data/h5/HEPP_august_2018/*.h5')
     if args.day:
-        datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*_'+str(args.day)+'*.h5')
+        for d in args.day:
+            datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*_'+str(d)+'*.h5')
     # select HEPP data from 22-26.02.2019 (solar quiet period) 
     #datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190222*.h5')
     #datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190223*.h5')
@@ -73,7 +76,15 @@ elif args.hepp_h:
     # get HEPP data of quiet period 1.-5.08.2018
     datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*'+str(args.month)+'*.h5')
     if args.day:
-        datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*'+str(args.day)+'*.h5')
+        for d in args.day:
+            datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*'+str(d)+'*.h5')
+elif args.noaa:
+    det = 'noaa'
+    datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data/poes_n19_'+str(args.month)+'*_proc.nc.root')
+    if args.day:
+        for d in args.day:
+            datapaths += glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data/poes_n19_'+str(d)+'_proc.nc.root')
+
 # sort files by time
 datapaths.sort(key=os.path.getmtime)
 
@@ -95,8 +106,10 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
         # find int in string
         OrbitDateTime = re.findall('\d+', run)
         # calculate time between start and stop of orbit
-        duration = abs(int(OrbitDateTime[7]) - int(OrbitDateTime[5]))
-        if args.hepp_l or args.hepp_h:
+        duration = 3000
+        if args.hepd:
+            duration = abs(int(OrbitDateTime[7]) - int(OrbitDateTime[5]))
+        elif args.hepp_l or args.hepp_h:
             duration = abs(int(OrbitDateTime[6]) - int(OrbitDateTime[4]))
 
         if duration < 3000: ## half-orbit not completed
@@ -127,6 +140,8 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
             cmd='python3 python/readH5.py --inputFile '+str(run)
             if args.useVersion is 'v2.1':
                 cmd='python3 python/readH5_v2.1.py --inputFile '+str(run)
+            if det=='noaa':
+                cmd='python3 python/readSEM2.py --data noaa --inputFile '+str(run)
             if args.integral:
                 cmd+=' --integral '+str(args.integral)
             if not args.quiet:
@@ -184,7 +199,7 @@ elif args.ana and args.test:
 
 # merge all root files
 elif args.merge and not args.test:
-    mge=''
+    mge=['']
     runList=[]
 
     if args.hepd:
@@ -193,9 +208,10 @@ elif args.merge and not args.test:
         findOld = None
         runList = []
         if args.day:
-            runList = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/CSES_HEP_DDD_*'+str(args.day)+'*.root')
-            mge = sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(args.day)+'_'+str(len(runList))+'_runs.root'
-            findOld = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(args.day)+'*.root')
+            for d in args.day:
+                runList += glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/CSES_HEP_DDD_*'+str(d)+'*.root')
+                mge += sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(d)+'_'+str(len(runList))+'_runs.root'
+                findOld += glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(d)+'*.root')
             runs = len(runList)
         elif args.month:
             runList = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/CSES_HEP_DDD_*'+str(args.month)+'*.root')
@@ -220,15 +236,15 @@ elif args.merge and not args.test:
         runList = glob.glob(pathToFind+'CSES_01_HEP_'+str(index)+'_L02*.root') #CSES_01_HEP_1_*.root')
 
         if args.day:
-            pathToFind = sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'
+            pathToFind += sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'
             if args.originalE:
                 pathToFind += 'originalEnergyBins/'
             elif args.integral:
-                pathToFind = sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'+str(args.integral)+'s/'
-
-            runList = sorted( glob.glob(pathToFind+'CSES_01_HEP_'+str(index)+'_L02_*'+str(args.day)+'*.root'), key=lambda x:float(x[-46:-41]) )
-            mge = pathToFind+'all_'+det+'_'+str(args.day)+'_'+str(len(runList))+'_runs.root'
-            findOld = glob.glob(pathToFind+'all_'+det+'_'+str(args.day)+'*.root')
+                pathToFind += sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'+str(args.integral)+'s/'
+            for d in args.day:
+                runList += sorted( glob.glob(pathToFind+'CSES_01_HEP_'+str(index)+'_L02_*'+str(d)+'*.root'), key=lambda x:float(x[-46:-41]) )
+                mge += pathToFind+'all_'+det+'_'+str(d)+'_'+str(len(runList))+'_runs.root'
+                findOld += glob.glob(pathToFind+'all_'+det+'_'+str(d)+'*.root')
             runs = len(runList)
         
     oldruns=0
@@ -256,11 +272,12 @@ elif args.merge and not args.test:
     if args.draw:
         cmd += '--drawHistos '
     if args.day:
-        cmd += '--day '+str(args.day)
+        for index,d in enumerate(args.day):
+            cmd2 = cmd + '--day '+str(args.day)
         if args.submit:
-            SubmitToCondor(cmd, mge, 1)
+            SubmitToCondor(cmd2, mge[index], 1)
         else:
-            os.system(cmd)
+            os.system(cmd2)
     
 
 elif args.merge and args.test:

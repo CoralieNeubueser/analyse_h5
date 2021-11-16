@@ -40,7 +40,8 @@ print("input files has ",entries, " entries")
 rootName = os.path.split(Rfilename)[1]
 outRootName = sharedOutPath()+"/data/root/"+args.useVersion+"/"+args.data+"/"+rootName
 month = rootName[9:15]
-day = rootName[15:17]
+day = rootName[9:17]
+print(day)
 
 print("Writing output into root file: ", outRootName)
 outRoot = r.TFile( outRootName , 'recreate' )
@@ -215,7 +216,7 @@ for evt in t:
     geomLo[0] = geomLongitude
     geomLa[0] = int(evt.maglat)
     B[0] = abs(evt.btotsat)
-    B_eq[0] = Beq
+    B_eq[0] = abs(Beq)
     N[0] = energy_bins
     Alt[0] = evt.alt
 

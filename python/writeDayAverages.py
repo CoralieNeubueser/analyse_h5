@@ -15,7 +15,7 @@ r.gStyle.SetPadTopMargin(0.05);
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
-parser.add_argument('--data', type=str, choices=['hepd','hepp_l_channel_narrow','hepp_l_channel_wide','hepp_h'], required=True, help='Define patht to data file.')
+parser.add_argument('--data', type=str, choices=['hepd','hepp_l_channel_narrow','hepp_l_channel_wide','hepp_h','noaa'], required=True, help='Define patht to data file.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 parser.add_argument('--threshold', type=int, default=100, help='Pick a number as minimum statistic in histograms.')
 parser.add_argument('--drawHistos', action='store_true', help='Tell if histograms should be drawn.')
@@ -36,6 +36,7 @@ threshold = args.threshold
 debug = args.debug
 det = args.data
 hepd = (args.data == 'hepd')
+hepp_l = False
 if 'hepp_l' in args.data:
     hepp_l = True
     det = 'hepp_l'
@@ -64,11 +65,7 @@ def getParallelMeans(strHist):
       branch = strHist[11]
       energyIndex = strHist[12]
       Lindex = strHist[13]
-      # get selection of tree entries
-      #elist = r.TEntryList()
-      #tree.Draw(">>elist_"+branch, cut, "entrylist")
-      #elist = r.gDirectory.Get("elist_"+branch)
-      #tree.SetEntryList(elist)
+
       # draw the histogram
       tree.Draw(plot, cut, opt)
       hist = r.gDirectory.Get(strHist[4])
@@ -246,7 +243,10 @@ for d in lst:
                         writeOut = str('{} {} {} '.format(round(en,1), L, P))
                         histName = 'hist_day_{0}_energy_{1}_L_{2}_p_{3}'.format(d,en,L,P) 
                         histNameCounts = 'hist_counts_day_{0}_energy_{1}_L_{2}_p_{3}'.format(d,en,L,P)
-                        lst_comm = [ filename, 'flux_{0}_{1}>>{2}'.format(L,P,histName), 'field>25000 && day=={0} && energy_{1}_{2}=={3}'.format(d,L,P,en), 'goff', histName, writeOut, outFileName, th1ds, iP, meanGeomIndex, str('flux_{0}_{1}*{2}>>{3}({4},0,{4})').format(L,P,geomFactor,histNameCounts,count_bins), '{0}_{1}_{2}_{3}'.format(d,L,P,en), ien, iL ]
+                        histCmdCounts = 'flux_{0}_{1}*{2}>>{3}({4},0,{4})'.format(L,P,geomFactor,histNameCounts,count_bins)
+                        if count_bins==-1:
+                            histCmdCounts ='flux_{0}_{1}*{2}>>{3}'.format(L,P,geomFactor,histNameCounts)
+                        lst_comm = [ filename, 'flux_{0}_{1}>>{2}'.format(L,P,histName), 'field>{4} && day=={0} && energy_{1}_{2}=={3}'.format(d,L,P,en,getSAAcut(det)), 'goff', histName, writeOut, outFileName, th1ds, iP, meanGeomIndex, histCmdCounts, '{0}_{1}_{2}_{3}'.format(d,L,P,en), ien, iL ]
 
                         commands.append(lst_comm)
                         count += 1

@@ -11,7 +11,7 @@ r.gStyle.SetOptStat(0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.', required=True)
-parser.add_argument('--data', type=str, choices=['hepd','hepp_l_channel_narrow','hepp_l_channel_wide','hepp_h'], help='Define input data.', required=True)
+parser.add_argument('--data', type=str, choices=['hepd','hepp_l_channel_narrow','hepp_l_channel_wide','hepp_h','noaa'], help='Define input data.', required=True)
 parser.add_argument('--thr', type=int, default=100, help='Define minimum statistics used.')
 parser.add_argument('--sigma', type=int, default=1, help='Define minimum sigma for flux values > <phi>+sigma*phi_rms.')
 parser.add_argument('--fitted', action='store_true', help='Use exponential fit tau value for threshold.')
@@ -68,9 +68,12 @@ storedEn = [round(en,1) for en in energies]
 print(storedEn)
 
 # output tree
-outfilename = filename.replace('all','all_highFluxes')
+fileSnip = 'all'
+if det=='noaa':
+    fileSnip = 'poes_n19'
+outfilename = filename.replace(fileSnip,'all_highFluxes_noaa')
 if args.fitted:
-    outfilename = filename.replace('all','all_highFluxes_fittedExp')
+    outfilename = filename.replace(fileSnip,'all_highFluxes_fittedExp')
 outRoot = r.TFile( outfilename, 'recreate' )
 out_tree = r.TTree( 'events', 'tree of fluxes' )
 
@@ -154,10 +157,10 @@ for day in days:
         if day!=ev.day:
             continue
         # reject SAA
-        if ev.field<25000:
+        if ev.field<getSAAcut(det):
             continue
         # L-range
-        if math.floor(L)>=10.:
+        if math.floor(L)>=10. or L<1:
             continue
         # run over max. 1000 events in debug mode
         if args.debug and ev.event>1000:
@@ -166,7 +169,6 @@ for day in days:
 
         # loop over every flux
         for ia,alpha in enumerate(ev.alpha):
-
             # match L to L bin
             if L<2:
                 L_bin = math.floor( ((L-1.)/0.2) )
@@ -174,7 +176,7 @@ for day in days:
                 L_bin = l_fine_bins.index(math.floor(L))
             L_binValue = l_fine_bins[L_bin]
             # match alpha to pitch bin
-            alpha_bin = int(float(alpha)/20.) 
+            alpha_bin = math.floor(alpha/20.) 
             alpha_binValue = alpha_bin*20
             # match energy to energy bin
             energyStored = energy[ia]
@@ -239,7 +241,8 @@ for day in days:
                         Signal[0] = flux/invGeomFactor
                     else:
                         Signal[0] = flux
-                    Channel[0] = ev.channel[ia]
+                    if det=='hepp_l_channel_wide' or det=='hepp_l_channel_narrow':
+                        Channel[0] = ev.channel[ia]
                     Day[0] = day
                     Time[0] = storedTime # daily hours
                     Longitude[0] = ev.Long

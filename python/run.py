@@ -201,11 +201,11 @@ elif args.ana and args.test:
 elif args.merge and not args.test:
     mge=['']
     runList=[]
+    findOld = []
 
     if args.hepd:
         # write 
         mge = sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd.root'
-        findOld = None
         runList = []
         if args.day:
             for d in args.day:
@@ -246,6 +246,13 @@ elif args.merge and not args.test:
                 mge += pathToFind+'all_'+det+'_'+str(d)+'_'+str(len(runList))+'_runs.root'
                 findOld += glob.glob(pathToFind+'all_'+det+'_'+str(d)+'*.root')
             runs = len(runList)
+
+    elif args.noaa:
+        runs=0
+        pathToFind=sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'
+        if args.day:
+            for d in args.day:
+                mge = pathToFind+'poes_n19_'+str(d)+'_proc.nc.root' 
         
     oldruns=0
     if len(findOld)>0:
@@ -273,9 +280,9 @@ elif args.merge and not args.test:
         cmd += '--drawHistos '
     if args.day:
         for index,d in enumerate(args.day):
-            cmd2 = cmd + '--day '+str(args.day)
+            cmd2 = cmd + '--day '+str(d)
         if args.submit:
-            SubmitToCondor(cmd2, mge[index], 1)
+            SubmitToCondor(cmd2, mge, 1)
         else:
             os.system(cmd2)
     
@@ -308,6 +315,8 @@ elif args.select:
     findFile = []
     detPath = det
     fileSnip = 'all_'+det+'_'
+    if det=='noaa':
+        fileSnip = 'poes_n19_'
     if args.test:
         detPath = 'L3_test/L3_repro'
         fileSnip = 'all_'
@@ -321,7 +330,8 @@ elif args.select:
             for every in found:
                 findFile.append( every )
     elif args.day:
-        findFile = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/'+fileSnip+str(args.day)+'*.root')
+        for d in args.day:
+            findFile = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/'+fileSnip+str(d)+'*.root')
 
     for ind,foundFile in enumerate(findFile):
         ind+=1
@@ -331,8 +341,9 @@ elif args.select:
         dayint = ind
         cmd = 'python3 python/findHighFluxes.py --inputFile '+foundFile+' --data '+det
         if args.day:
-            cmd += ' --day '+str(args.day)
-            dayint = args.day
+            if d in args.day:
+                cmd += ' --day '+str(d)
+                dayint = d
         elif args.month:
             cmd += ' --day '+str(args.month)+strDay
             dayint = int(str(args.month)+strDay)

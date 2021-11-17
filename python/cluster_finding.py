@@ -18,6 +18,7 @@ def main():
     window_size = args.WINDOW
     cut_name = args.CUT
     min_seed_number = args.MINNSEED
+    parameters = args.ONLYIN
 
     if cut_name!='99perc' and cut_name!='weights' and cut_name!='dummy_cut':
         cut_file = pkl.load(open(args.CUTfile,'rb'))
@@ -74,7 +75,20 @@ def main():
 
     # clustering algorithm lines
     X = np.stack([np.array(time),np.array(alpha)*10000.,np.array(L)*10000.,np.array(energy)*10000],axis=1)
-    clustering = DBSCAN(eps=window_size, metric='euclidean', min_samples=1, n_jobs=-1).fit(X)
+    Xfit = np.stack([np.array(time)],axis=1)
+    if parameters==['L','Pitch','Energy']:
+        print("Clustering is run in time/L/alpha/energy only.")
+        Xfit = np.stack([np.array(time),np.array(alpha)*10000.,np.array(L)*10000.,np.array(energy)*10000],axis=1)
+    elif parameters==['L','Energy']:
+        print("Clustering is run in time/L/energy only.")
+        Xfit = np.stack([np.array(time),np.array(L)*10000.,np.array(energy)*10000],axis=1)
+    elif parameters==['Energy']:
+        print("Clustering is run in time/energy only.")
+        Xfit = np.stack([np.array(time),np.array(energy)*10000],axis=1)
+    else:
+        print("Clustering is run in time only.")
+
+    clustering = DBSCAN(eps=window_size, metric='euclidean', min_samples=1, n_jobs=-1).fit(Xfit)
     y_temp = clustering.labels_
 
     y = []
@@ -120,7 +134,16 @@ def main():
         energy_cluster = cluster_entries[0,3]/10000
         for cls_ev in np.arange(start_cluster,end_cluster+1):
             tree_sig.GetEntry(int(cls_ev))
-            if (tree_sig.L == L_cluster) and (tree_sig.alpha == alpha_cluster) and (tree_sig.energy == energy_cluster):
+            if parameters==['L','Pitch','Energy']:
+                if (tree_sig.L == L_cluster) and (tree_sig.alpha == alpha_cluster) and (tree_sig.energy == energy_cluster):
+                    cluster_index[int(cls_ev)] = int(cluster_dict[int(cls_i)])
+            elif parameters==['L','Energy']:
+                if (tree_sig.L == L_cluster) and (tree_sig.energy == energy_cluster):
+                    cluster_index[int(cls_ev)] = int(cluster_dict[int(cls_i)])
+            elif parameters==['Energy']:
+                if (tree_sig.energy == energy_cluster):
+                    cluster_index[int(cls_ev)] = int(cluster_dict[int(cls_i)])
+            else:
                 cluster_index[int(cls_ev)] = int(cluster_dict[int(cls_i)])
 
     file_root.Close()
@@ -170,6 +193,7 @@ if __name__ == '__main__':
     parser.add_argument('--CUTfile', type=str, default='99perc', help='file with thresholds per L/L/alpha/energy')
     parser.add_argument('--WINDOW', type=float, default=10, help='window size [sec]')
     parser.add_argument('--MINNSEED', type=int, default=2, help='minimum number of seeds to form a cluster [#]')
+    parser.add_argument('--ONLYIN', nargs='+', choices=['L','Pitch','Energy'], help='cluster in specific parameters.')
 
 
     args = parser.parse_args()

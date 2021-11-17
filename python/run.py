@@ -20,6 +20,7 @@ parser.add_argument('--cluster', action='store_true', help='Run clustering on 1%
 parser.add_argument('--cut', type=str, default='99perc', choices=['99perc','weights','z_score_more2','z_score_more3','dummy_cut'], help='Define the cut type.')
 parser.add_argument('--window',type=int, default=10, help='Define window length in s.')
 parser.add_argument('--seeds', type=int, default=4, help='Define numer of seeds necessary to build cluster.')
+parser.add_argument('--onlyIn', nargs='+', choices=['L','Pitch','Energy'], help='Define the parameter space in which to cluster. KEEP THE ORDER')
 
 ### OPTIONS
 parser.add_argument('--originalE', action='store_true', help='Use fine energy binning.')
@@ -28,6 +29,7 @@ parser.add_argument('--integral', type=int, help='Define the time window for int
 parser.add_argument('--draw', action='store_true', help='Allows to write out root file with distributions that were used to extract averages, and RMS99.')
 parser.add_argument('--allHists', action='store_true', help='Merge all runs, including the histograms.')
 parser.add_argument('--test', action='store_true', help='Analyse test runs.')
+
 ### define specific period to run over
 parser.add_argument('--day', type=int, nargs='+', required=False, help='Merge orbits of a specific day [yyyymmdd].')
 parser.add_argument('--month', type=int, required=False, help='Merge orbits of a specific month [yyyymm].')
@@ -411,7 +413,16 @@ elif args.cluster:
 
     # 3. run clustering
     alreadyDone=False
-    clusterOutdir = sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/clustered_inEnergy/'+args.cut+'/'+str(args.window)+'s_window/'+str(args.seeds)+'_seeds/'
+    clusteredIn = 'clustered_inTime'
+    if args.onlyIn:
+        if isinstance(args.onlyIn, list):
+            for par in args.onlyIn:
+                clusteredIn += par
+        else:
+            clusteredIn += args.onlyIn
+    else:
+        clusteredIn += 'Only'
+    clusterOutdir = sharedOutPath()+'data/root/{0}/{1}/{2}/{3}/{4}s_window/{5}_seeds/'.format(args.useVersion,detPath,clusteredIn,args.cut,args.window,args.seeds)
     if not os.path.exists( clusterOutdir ):
         print("Directory is created: ", clusterOutdir)
         os.makedirs( clusterOutdir )
@@ -423,7 +434,14 @@ elif args.cluster:
         os.system('cp '+clusterInput+' '+clusterOutdir)   
 
         cmd2 = 'python3 python/cluster_finding.py --IN '+clusterOutdir+os.path.basename(clusterInput)+' --OUT ./ --CUT '+args.cut+' --CUTfile '+thresholdFile+' --WINDOW '+str(args.window)+' --MINNSEED '+str(args.seeds)
-    
+        if args.onlyIn:
+            if isinstance(args.onlyIn, list):
+                cmd2 +=' --ONLYIN '
+                for par in args.onlyIn:
+                    cmd2 += par+' '
+            else:
+                cmd2 = cmd2+' --ONLYIN '+args.onlyIn
+
         cmdTot += cmd2
         print(cmdTot)
 

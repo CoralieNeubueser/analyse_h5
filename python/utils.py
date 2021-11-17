@@ -402,9 +402,11 @@ def getGeomFactor(det,energyBin):
         ele_corr_GF = 16*[0.12] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
     elif det=='hepp_l_channel_wide':
         ele_corr_GF = 16*[0.73] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+    # unknown geometrical factors.. for HEPP-H and NOAA-POES19
     elif det=='hepp_h':
-        ele_corr_GF = 16*[0.] 
-
+        ele_corr_GF = 16*[1.] 
+    elif det=='noaa':
+        ele_corr_GF = 4*[1.]
     return ele_corr_GF[energyBin]
 
 def getInverseGeomFactor(det,energyBin):
@@ -418,6 +420,8 @@ def getInverseGeomFactor(det,energyBin):
     elif det=='hepp_l_channel_wide':
         ele_corr_GF = 16*[0.73]
         return 1./ele_corr_GF[energyBin]
+    elif det=='noaa':
+        return 1
     else:
         return 0.
 
@@ -449,7 +453,7 @@ def getCountsBins(det):
     elif det=='hepp_l':
         return 1000000
     else:
-        return 1000
+        return -1
 
 # return a list of days
 def getDays(tree):
@@ -665,8 +669,8 @@ def SubmitToCondor(cmd,run,irun):
     fsub.write('output                = %s/out/job.%s.$(ClusterId).$(ProcId).out\n'%(logdir,str(irun)))
     fsub.write('log                   = %s/log/job.%s.$(ClusterId).log\n'%(logdir,str(irun)))
     fsub.write('error                 = %s/err/job.%s.$(ClusterId).$(ProcId).err\n'%(logdir,str(irun)))
-    fsub.write('RequestCpus = 4\n')
-    fsub.write('+JobFlavour = "espresso"\n')
+    f#sub.write('RequestCpus = 4\n')
+    fsub.write('+JobFlavour = "longlunch"\n')
     fsub.write('queue 1\n')
     fsub.close()
     
@@ -698,13 +702,13 @@ def SubmitListToCondor(args, irun=1):
     fsub.write('output                = %s/out/job.%s.$(ClusterId).$(ProcId).out\n'%(logdir,str(irun)))
     fsub.write('log                   = %s/log/job.%s.$(ClusterId).log\n'%(logdir,str(irun)))
     fsub.write('error                 = %s/err/job.%s.$(ClusterId).$(ProcId).err\n'%(logdir,str(irun)))
-    fsub.write('RequestCpus = 4\n')
+    fsub.write('RequestCpus = 8\n')
     #fsub.write('Request_Memory = 32 Mb')
     fsub.write('+JobFlavour = "longlunch"\n')
     fsub.write("queue executable,seed from %s" % os.path.join(logdir, "arguments.txt"))    
     fsub.close()
 
-    cmdBatch="condor_submit -name sn-01.cr.cnaf.infn.it %s/%s \n"%(logdir,fsubname)
+    cmdBatch="condor_submit -name sn-02 %s/%s \n"%(logdir,fsubname)
     print(cmdBatch)
     p = subprocess.Popen(cmdBatch, shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 
@@ -770,9 +774,17 @@ def getAlphaLindex(alpha_v, L_v):
     return ia,il
 
 ## read-in of list of days with EQs
-def readEQfile():
-    df = pd.read_csv('{}/data/earthquakes_2019_2021.csv'.format(sharedOutPath()), usecols=['time','latitude','longitude'], sep=';') # names=['time','latitude','longitude','depth','mag','magType','nst','gap','dmin','rms','net','id','updated','place','type','horizontalError','depthError','magError','magNst','status','locationSource','magSource']
-    months = np.unique([int(m[:7].replace('-','')) for m in df.time])
-    days = [int(day[:10].replace('-','')) for day in df.time]
-    daytimes = [int(t[11:13])+int(t[14:16])/60 for t in df.time]
+def readEQfile(magMin=0):
+    df = pd.read_csv('{}/data/earthquakes_2019_2021.csv'.format(sharedOutPath()), usecols=['time','latitude','longitude','mag'], sep=';')
+    df_sel = df[df.mag>magMin]
+    months = np.unique([int(m[:7].replace('-','')) for m in df_sel.time])
+    days = [int(day[:10].replace('-','')) for day in df_sel.time]
+    daytimes = [int(t[11:13])+int(t[14:16])/60 for t in df_sel.time]
     return months, days, daytimes 
+
+## get SAA cut dependent on detector
+def getSAAcut(det):
+    if det=='noaa':
+        return 22000
+    else:
+        return 25000

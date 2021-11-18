@@ -99,11 +99,13 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
     if len(datapaths) < runs:
         print("Only {} files available for reading. ".format(len(datapaths)))
         runs = len(datapaths)
-
+    
+    # run 10 recos per job 
+    totCmd = [""]*math.ceil(len(datapaths)/10)
     for irun,run in enumerate(datapaths):
-        if irun>(runs-1):
-            break
-
+        #if irun>(runs-1):
+        #    break
+        
         # test if half-oribit is complete
         # find int in string
         OrbitDateTime = re.findall('\d+', run)
@@ -159,20 +161,22 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
             if args.originalE:
                 cmd+=' --useOriginalEnergyBinning '
             print(cmd)
+            totCmd[math.floor(irun/10)] += cmd+'\n'
 
-            if args.submit:
-                exefilename = 'job_%s.sh'%(str(os.path.split(run)[1].replace('.h5','')))
-                if args.channel and args.integral:
-                    exefilename = exefilename.replace('000.','channel_'+str(args.channel)+'_int_'+str(args.integral)+'s.')
-                elif args.channel:
-                    exefilename = exefilename.replace('000.','channel_'+str(args.channel)+'.')
-                elif args.integral:
-                    exefilename = exefilename.replace('000.','int_'+str(args.integral)+'s.')
-                exefile = writeExecutionFile(home()+'/log/'+exefilename, cmd)
-                print("Write execution file to:", exefilename)
-                args_file.write("%s\n"%(home()+'/log/'+exefilename))
-            else:
-                os.system(cmd)
+    for ijob,job in enumerate(totCmd):
+        if args.submit:
+            exefilename = 'job_%s_%s.sh'%(str(os.path.split(run)[1].replace('.h5','')),ijob)
+            if args.channel and args.integral:
+                exefilename = exefilename.replace('000.','channel_'+str(args.channel)+'_int_'+str(args.integral)+'s.')
+            elif args.channel:
+                exefilename = exefilename.replace('000.','channel_'+str(args.channel)+'.')
+            elif args.integral:
+                exefilename = exefilename.replace('000.','int_'+str(args.integral)+'s.')
+            exefile = writeExecutionFile(home()+'/log/'+exefilename, job)
+            print("Write execution file to:", exefilename)
+            args_file.write("%s\n"%(home()+'/log/'+exefilename))
+        else:
+            os.system(job)
                 
     args_file.close()
     if args.submit:

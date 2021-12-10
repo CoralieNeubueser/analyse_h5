@@ -1,7 +1,7 @@
 import ROOT as r
 import argparse
 import numpy as np
-#from tqdm.auto import tqdm 
+from utils import * 
 from datetime import datetime
 import seaborn as sns
 import os
@@ -19,6 +19,8 @@ def main():
     cut_name = args.CUT
     min_seed_number = args.MINNSEED
     parameters = args.ONLYIN
+    twoseed = args.DOUBLESEED
+    det = args.DET
 
     if cut_name!='99perc' and cut_name!='weights' and cut_name!='dummy_cut':
         cut_file = pkl.load(open(args.CUTfile,'rb'))
@@ -30,6 +32,21 @@ def main():
     nentries = tree_sig.GetEntries()
 
     print('Entries before '+str(cut_name), nentries)
+
+    n_energy_bins, energy_bins, en_max = getEnergyBins(det, True)
+    time_bin = getTimeBins(det)
+    _,alpha_bins = getPitchBins()
+    _,L_bins = getLbins()
+    time, energy = [], []
+
+    test_energies = set()
+    for ev in np.arange(0,nentries):
+         tree_sig.GetEntry(ev)
+         if len(test_energies) < n_energy_bins:
+             test_energies.add(tree_sig.energy)
+         else:
+             break
+    energy_bins = test_energies
 
     time, alpha, pitch, L, energy, event_idx, cut = [], [], [], [], [], [], []
 
@@ -72,6 +89,134 @@ def main():
         event_idx.append(i)
 
     print('Entries after '+str(cut_name), len(time))
+
+    if twoseed is True:
+
+        time = np.array(time)
+        alpha = np.array(alpha)
+        L = np.array(L)
+        energy = np.array(energy)
+        event_idx = np.array(event_idx)
+
+        time_seed, alpha_seed, pitch_seed, L_seed, energy_seed, event_idx_seed, cut_seed = [], [], [], [], [], [], []
+
+        if parameters==['L','Pitch','Energy']:
+            for i_ene in energy_bins:
+                for i_L in L_bins:
+                    for i_alpha in alpha_bins:
+                        time_temp = time[(energy == i_ene) & (L == i_L) & (alpha == i_alpha)]
+                        alpha_temp = alpha[(energy == i_ene) & (L == i_L) & (alpha == i_alpha)]
+                        L_temp = L[(energy == i_ene) & (L == i_L) & (alpha == i_alpha)]
+                        energy_temp = energy[(energy == i_ene) & (L == i_L) & (alpha == i_alpha)]
+                        event_idx_temp = event_idx[(energy == i_ene) & (L == i_L) & (alpha == i_alpha)]
+                        i_seed = 0
+
+                        while i_seed < len(time_temp)-1:
+                            if (time_temp[i_seed+1] - time_temp[i_seed]) < 2*time_bin:
+                                time_seed.append(time_temp[i_seed])
+                                alpha_seed.append(alpha_temp[i_seed])
+                                L_seed.append(L_temp[i_seed])
+                                energy_seed.append(energy_temp[i_seed])
+                                event_idx_seed.append(event_idx_temp[i_seed])
+
+                                time_seed.append(time_temp[i_seed+1])
+                                alpha_seed.append(alpha_temp[i_seed+1])
+                                L_seed.append(L_temp[i_seed+1])
+                                energy_seed.append(energy_temp[i_seed+1])
+                                event_idx_seed.append(event_idx_temp[i_seed+1])
+                                i_seed += 2
+                            else:
+                                i_seed += 1
+
+        elif parameters==['L','Energy']:
+            for i_ene in energy_bins:
+                for i_L in L_bins:
+                    time_temp = time[(energy == i_ene) & (L == i_L)]
+                    time_temp = time[(energy == i_ene) & (L == i_L)]
+                    alpha_temp = alpha[(energy == i_ene) & (L == i_L)]
+                    L_temp = L[(energy == i_ene) & (L == i_L)]
+                    energy_temp = energy[(energy == i_ene) & (L == i_L)]
+                    event_idx_temp = event_idx[(energy == i_ene) & (L == i_L)]
+                    i_seed = 0
+
+                    while i_seed < len(time_temp)-1:
+                        if (time_temp[i_seed+1] - time_temp[i_seed]) < 2*time_bin:
+                            time_seed.append(time_temp[i_seed])
+                            alpha_seed.append(alpha_temp[i_seed])
+                            L_seed.append(L_temp[i_seed])
+                            energy_seed.append(energy_temp[i_seed])
+                            event_idx_seed.append(event_idx_temp[i_seed])
+
+                            time_seed.append(time_temp[i_seed+1])
+                            alpha_seed.append(alpha_temp[i_seed+1])
+                            L_seed.append(L_temp[i_seed+1])
+                            energy_seed.append(energy_temp[i_seed+1])
+                            event_idx_seed.append(event_idx_temp[i_seed+1])
+                            i_seed += 2
+                        else:
+                            i_seed += 1
+
+        elif parameters==['Energy']:
+            for i_ene in energy_bins:
+                time_temp = time[(energy == i_ene)]
+                alpha_temp = alpha[(energy == i_ene)]
+                L_temp = L[(energy == i_ene)]
+                energy_temp = energy[(energy == i_ene)]
+                event_idx_temp = event_idx[(energy == i_ene)]
+                i_seed = 0
+
+                while i_seed < len(time_temp)-1:
+                    if (time_temp[i_seed+1] - time_temp[i_seed]) < 2*time_bin:
+                        time_seed.append(time_temp[i_seed])
+                        alpha_seed.append(alpha_temp[i_seed])
+                        L_seed.append(L_temp[i_seed])
+                        energy_seed.append(energy_temp[i_seed])
+                        event_idx_seed.append(event_idx_temp[i_seed])
+
+                        time_seed.append(time_temp[i_seed+1])
+                        alpha_seed.append(alpha_temp[i_seed+1])
+                        L_seed.append(L_temp[i_seed+1])
+                        energy_seed.append(energy_temp[i_seed+1])
+                        event_idx_seed.append(event_idx_temp[i_seed+1])
+                        i_seed += 2
+                    else:
+                        i_seed += 1
+        else:
+            time_temp = time
+            i_seed = 0
+
+            while i_seed < len(time_temp)-1:
+                if (time_temp[i_seed+1] - time_temp[i_seed]) < 2*time_bin:
+                    time_seed.append(time_temp[i_seed])
+                    alpha_seed.append(alpha[i_seed])
+                    L_seed.append(L[i_seed])
+                    energy_seed.append(energy[i_seed])
+                    event_idx_seed.append(event_idx[i_seed])
+
+                    time_seed.append(time_temp[i_seed+1])
+                    alpha_seed.append(alpha[i_seed+1])
+                    L_seed.append(L[i_seed+1])
+                    energy_seed.append(energy[i_seed+1])
+                    event_idx_seed.append(event_idx[i_seed+1])
+                    i_seed += 2
+                else:
+                    i_seed += 1
+
+        print('Entries after seed finding ', len(time_seed))
+
+        time = np.array(time_seed)
+        alpha = np.array(alpha_seed)
+        L = np.array(L_seed)
+        energy = np.array(energy_seed)
+        event_idx = np.array(event_idx_seed)
+
+        time_idx = time.argsort()
+        time = time[time_idx]
+        alpha = alpha[time_idx]
+        L = L[time_idx]
+        energy = energy[time_idx]
+        event_idx = event_idx[time_idx]
+    
 
     # clustering algorithm lines
     X = np.stack([np.array(time),np.array(alpha)*10000.,np.array(L)*10000.,np.array(energy)*10000],axis=1)
@@ -170,17 +315,13 @@ def main():
     '''
     for i in np.arange(0,nentries):
         t.GetEntry(i)
-
         if i in Xy[Xy[:,-1]!=-1][:,3]:
             clsnr_b[0] = cluster_dict[y[Xy[:,3]==i][0][0]]
         else:
             clsnr_b[0] = -1
-
         thr_b[0] = cut[i]
-
         clsnr_new.Fill()
         thr_new.Fill()
-
     newroot.Write("", r.TObject.kOverwrite)
     newroot.Close()
     '''
@@ -194,6 +335,8 @@ if __name__ == '__main__':
     parser.add_argument('--WINDOW', type=float, default=10, help='window size [sec]')
     parser.add_argument('--MINNSEED', type=int, default=2, help='minimum number of seeds to form a cluster [#]')
     parser.add_argument('--ONLYIN', nargs='+', choices=['L','Pitch','Energy'], help='cluster in specific parameters.')
+    parser.add_argument('--DOUBLESEED', action='store_true', help='Require two subsequent seeds.')
+    parser.add_argument('--DET', type=str, choices=['hepp_l','noaa'], help='Require two subsequent seeds.')
 
 
     args = parser.parse_args()

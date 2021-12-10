@@ -21,6 +21,7 @@ parser.add_argument('--cut', type=str, default='99perc', choices=['99perc','weig
 parser.add_argument('--window',type=int, default=10, help='Define window length in s.')
 parser.add_argument('--seeds', type=int, default=4, help='Define numer of seeds necessary to build cluster.')
 parser.add_argument('--onlyIn', nargs='+', choices=['L','Pitch','Energy'], help='Define the parameter space in which to cluster. KEEP THE ORDER')
+parser.add_argument('--doubleSeed', action='store_true', help='Require two subsequent seeds for cluster building.')
 
 ### OPTIONS
 parser.add_argument('--originalE', action='store_true', help='Use fine energy binning.')
@@ -46,6 +47,7 @@ if args.EQlist:
     readEQlist()
 
 det = 'hepd'
+data = 'hepd'
 datapaths = []
 if args.hepd:
     # run all orbits in August 2018
@@ -61,6 +63,7 @@ if args.hepd:
         # new test-sample corrected reconstructed energy 
         datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3_repro/*.h5')
 elif args.hepp_l:
+    data = 'hepp_l'
     det = 'hepp_l_channel_'+args.channel
     # get HEPP data of quiet period 1.-5.08.2018
     datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*_'+str(args.month)+'*.h5') #('/storage/gpfs_data/limadou/data/flight_data/analysis/data/h5/HEPP_august_2018/*.h5')
@@ -74,6 +77,7 @@ elif args.hepp_l:
     #datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190225*.h5')
     #datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190226*.h5')
 elif args.hepp_h:
+    data = 'hepp_h'
     det = 'hepp_h'
     # get HEPP data of quiet period 1.-5.08.2018
     datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*'+str(args.month)+'*.h5')
@@ -81,6 +85,7 @@ elif args.hepp_h:
         for d in args.day:
             datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*'+str(d)+'*.h5')
 elif args.noaa:
+    data = 'noaa'
     det = 'noaa'
     datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data/poes_n19_'+str(args.month)+'*_proc.nc.root')
     if args.day:
@@ -102,6 +107,7 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
     
     # run 10 recos per job 
     totCmd = [""]*math.ceil(len(datapaths)/10)
+    toProcessFiles=0
     for irun,run in enumerate(datapaths):
         #if irun>(runs-1):
         #    break
@@ -161,17 +167,20 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
             if args.originalE:
                 cmd+=' --useOriginalEnergyBinning '
             print(cmd)
-            totCmd[math.floor(irun/10)] += cmd+'\n'
+            totCmd[math.floor(toProcessFiles/10)] += cmd+'\n'
+            toProcessFiles+=1
 
     for ijob,job in enumerate(totCmd):
+        if job=="":
+            continue
         if args.submit:
-            exefilename = 'job_%s_%s.sh'%(str(os.path.split(run)[1].replace('.h5','')),ijob)
+            exefilename = 'job_%s_%s_%s.sh'%(det,str(os.path.split(run)[1].replace('.h5','')),ijob)
             if args.channel and args.integral:
-                exefilename = exefilename.replace('000.','channel_'+str(args.channel)+'_int_'+str(args.integral)+'s.')
+                exefilename = exefilename.replace('000','_int_'+str(args.integral)+'s')
             elif args.channel:
-                exefilename = exefilename.replace('000.','channel_'+str(args.channel)+'.')
+                exefilename = exefilename.replace('000','channel_'+str(args.channel))
             elif args.integral:
-                exefilename = exefilename.replace('000.','int_'+str(args.integral)+'s.')
+                exefilename = exefilename.replace('000','int_'+str(args.integral)+'s')
             exefile = writeExecutionFile(home()+'/log/'+exefilename, job)
             print("Write execution file to:", exefilename)
             args_file.write("%s\n"%(home()+'/log/'+exefilename))
@@ -179,7 +188,7 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
             os.system(job)
                 
     args_file.close()
-    if args.submit:
+    if args.submit and toProcessFiles:
         SubmitListToCondor(args_file)
 
         
@@ -215,10 +224,10 @@ elif args.merge and not args.test:
         runList = []
         if args.day:
             for d in args.day:
-                runList += glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/CSES_HEP_DDD_*'+str(d)+'*.root')
-                mge += sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(d)+'_'+str(len(runList))+'_runs.root'
-                findOld += glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(d)+'*.root')
-            runs = len(runList)
+                runList = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/CSES_HEP_DDD_*'+str(d)+'*.root')
+                mge = sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(d)+'_'+str(len(runList))+'_runs.root'
+                findOld = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(d)+'*.root')
+                runs = len(runList)
         elif args.month:
             runList = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/CSES_HEP_DDD_*'+str(args.month)+'*.root')
             mge = sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(args.month)+'_'+str(len(runList))+'_runs.root'
@@ -242,16 +251,16 @@ elif args.merge and not args.test:
         runList = glob.glob(pathToFind+'CSES_01_HEP_'+str(index)+'_L02*.root') #CSES_01_HEP_1_*.root')
 
         if args.day:
-            pathToFind += sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'
+            pathToFind = sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'
             if args.originalE:
                 pathToFind += 'originalEnergyBins/'
             elif args.integral:
-                pathToFind += sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'+str(args.integral)+'s/'
+                pathToFind = sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'+str(args.integral)+'s/'
             for d in args.day:
-                runList += sorted( glob.glob(pathToFind+'CSES_01_HEP_'+str(index)+'_L02_*'+str(d)+'*.root'), key=lambda x:float(x[-46:-41]) )
-                mge += pathToFind+'all_'+det+'_'+str(d)+'_'+str(len(runList))+'_runs.root'
-                findOld += glob.glob(pathToFind+'all_'+det+'_'+str(d)+'*.root')
-            runs = len(runList)
+                runList = sorted( glob.glob(pathToFind+'CSES_01_HEP_'+str(index)+'_L02_*'+str(d)+'*.root'), key=lambda x:float(x[-46:-41]) )
+                mge = pathToFind+'all_'+det+'_'+str(d)+'_'+str(len(runList))+'_runs.root'
+                findOld = glob.glob(pathToFind+'all_'+det+'_'+str(d)+'*.root')
+                runs = len(runList)
 
     elif args.noaa:
         runs=0
@@ -376,7 +385,7 @@ elif args.cluster:
     clusterInput = ''
     cmdTot=''
 
-    if not args.day:
+    if args.month:
         for iday in range(1,32):
             strday = str(iday)
             if iday < 10:
@@ -409,7 +418,7 @@ elif args.cluster:
         cmdTot=cmd
 
     # 2. merge into month
-    if not args.day:
+    if args.month:
         mge = sharedOutPath()+"data/root/"+args.useVersion+'/'+detPath+'/'+fileSnip+str(args.month)+'.root'
         clusterInput = mge
         if not os.path.isfile( mge ):
@@ -427,17 +436,22 @@ elif args.cluster:
     else:
         clusteredIn += 'Only'
     clusterOutdir = sharedOutPath()+'data/root/{0}/{1}/{2}/{3}/{4}s_window/{5}_seeds/'.format(args.useVersion,detPath,clusteredIn,args.cut,args.window,args.seeds)
+    if args.doubleSeed:
+        clusterOutdir = sharedOutPath()+'data/root/{0}/{1}/{2}/{3}/{4}s_window/{5}_subs_seeds/'.format(args.useVersion,detPath,clusteredIn,args.cut,args.window,args.seeds)
+
     if not os.path.exists( clusterOutdir ):
         print("Directory is created: ", clusterOutdir)
         os.makedirs( clusterOutdir )
     elif os.path.isfile( clusterOutdir+os.path.basename(clusterInput) ):
-        print('Clustering already done, use different parameters!')
-        alreadyDone=True
+        overwrite = input('Clustering already done, do you want to over-write? [y/n] ')
+        if overwrite=="n":
+            alreadyDone=True
 
     if not alreadyDone:
-        os.system('cp '+clusterInput+' '+clusterOutdir)   
-
-        cmd2 = 'python3 python/cluster_finding.py --IN '+clusterOutdir+os.path.basename(clusterInput)+' --OUT ./ --CUT '+args.cut+' --CUTfile '+thresholdFile+' --WINDOW '+str(args.window)+' --MINNSEED '+str(args.seeds)
+        os.system('cp '+clusterInput+' '+clusterOutdir)
+        cmd2 = 'python3 python/cluster_finding.py --IN {0}{1} --OUT ./ --DET {2} --CUT {3} --CUTfile {4} --WINDOW {5} --MINNSEED {6}'.format(clusterOutdir,os.path.basename(clusterInput),data,args.cut,thresholdFile,args.window,args.seeds)
+        if args.doubleSeed:
+            cmd2 += ' --DOUBLESEED '
         if args.onlyIn:
             if isinstance(args.onlyIn, list):
                 cmd2 +=' --ONLYIN '

@@ -63,6 +63,14 @@ def getPitchBins():
     p_bins=len(p_x_bins)
     return p_bins, p_x_bins
 
+# get time bin width for all detectors
+# returns the time bin width in seconds
+def getTimeBins(det):
+    if det=='noaa':
+        return 2
+    else:
+        return 1
+
 # define energy bins
 # returns 
 # 1. the number of energy bins for either hepd of hepp data
@@ -646,9 +654,9 @@ def SubmitToCondor(cmd,run,irun):
     frunname = 'job_%s.sh'%(str(runname.replace('.h5','')))
     print(frunname)
 
-    os.system('chmod 777 %s/%s'%(logdir,frunname))
-
     frun = writeExecutionFile(logdir+'/'+frunname, cmd)
+
+    os.system('chmod 777 %s/%s'%(logdir,frunname))
 
     os.system("mkdir -p %s/out"%logdir)
     os.system("mkdir -p %s/log"%logdir)
@@ -669,12 +677,12 @@ def SubmitToCondor(cmd,run,irun):
     fsub.write('output                = %s/out/job.%s.$(ClusterId).$(ProcId).out\n'%(logdir,str(irun)))
     fsub.write('log                   = %s/log/job.%s.$(ClusterId).log\n'%(logdir,str(irun)))
     fsub.write('error                 = %s/err/job.%s.$(ClusterId).$(ProcId).err\n'%(logdir,str(irun)))
-    f#sub.write('RequestCpus = 4\n')
+    #fsub.write('RequestCpus = 4\n')
     fsub.write('+JobFlavour = "longlunch"\n')
     fsub.write('queue 1\n')
     fsub.close()
     
-    cmdBatch="condor_submit -name sn-01.cr.cnaf.infn.it %s/%s \n"%(logdir,fsubname)
+    cmdBatch="condor_submit -name sn-02 %s/%s \n"%(logdir,fsubname)
     print(cmdBatch)
     p = subprocess.Popen(cmdBatch, shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 

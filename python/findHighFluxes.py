@@ -69,9 +69,12 @@ print(storedEn)
 
 # output tree
 fileSnip = 'all'
+replacement = 'all_highFluxes'
 if det=='noaa':
     fileSnip = 'poes_n19'
-outfilename = filename.replace(fileSnip,'all_highFluxes_noaa')
+    replacement = 'all_highFluxes_noaa'
+outfilename = filename.replace(fileSnip,replacement)
+
 if args.fitted:
     outfilename = filename.replace(fileSnip,'all_highFluxes_fittedExp')
 outRoot = r.TFile( outfilename, 'recreate' )
@@ -88,6 +91,7 @@ Latitude = array('i', [0])
 Longitude_geom = array('i', [0])
 Latitude_geom = array('i', [0])
 Lshell = array('f', [0.])
+Lshell_unbinned = array('f', [0.])
 Alpha_eq = array('f', [0.])
 Pitch = array('f', [0.])
 Energy = array('f', [0.])
@@ -108,6 +112,7 @@ out_tree.Branch( 'lat', Latitude, 'lat/I' )
 out_tree.Branch( 'geom_lon', Longitude_geom, 'geom_lon/I' )
 out_tree.Branch( 'geom_lat', Latitude_geom, 'geom_lat/I' )
 out_tree.Branch( 'L', Lshell, 'L/F' )
+out_tree.Branch( 'L_unbinned', Lshell_unbinned, 'L_unbinned/F' )
 out_tree.Branch( 'alpha', Alpha_eq, 'alpha/F' )
 out_tree.Branch( 'energy', Energy, 'energy/F' )
 out_tree.Branch( 'pitch', Pitch, 'pitch/F' )
@@ -253,6 +258,7 @@ for day in days:
                     # write in L bins
                     # use fine L bins
                     Lshell[0] = L_binValue
+                    Lshell_unbinned[0] = L
                     # write in alpha bins
                     binned_alpha = Pbins[alpha_bin]
                     Alpha_eq[0] = binned_alpha

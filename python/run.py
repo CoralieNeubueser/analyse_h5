@@ -35,7 +35,7 @@ parser.add_argument('--test', action='store_true', help='Analyse test runs.')
 parser.add_argument('--day', type=int, nargs='+', required=False, help='Merge orbits of a specific day [yyyymmdd].')
 parser.add_argument('--month', type=int, required=False, help='Merge orbits of a specific month [yyyymm].')
 
-parser.add_argument('--useVersion', type=str, default='v2', help='Define wether flux=0 is stored.')
+parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1','v3'], help='Define wether flux=0 is stored.')
 parser.add_argument('--submit', action='store_true', help='Submit to HTCondor batch farm.')
 parser.add_argument('-q','--quiet', action='store_true', help='Run without printouts.')
 args,_=parser.parse_known_args()
@@ -148,10 +148,14 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
             if not os.path.isdir(buildPath):
                 os.makedirs(buildPath)
             cmd='python3 python/readH5.py --inputFile '+str(run)
-            if args.useVersion is 'v2.1':
+            if args.useVersion == 'v2.1':
                 cmd='python3 python/readH5_v2.1.py --inputFile '+str(run)
+            elif args.useVersion == 'v3':
+                cmd='python3 python/readH5_v3.py --inputFile '+str(run)
             if det=='noaa':
                 cmd='python3 python/readSEM2.py --data noaa --inputFile '+str(run)
+                if args.useVersion == 'v3':
+                    cmd='python3 python/readSEM2_v3.py --data noaa --inputFile '+str(run)
             if args.integral:
                 cmd+=' --integral '+str(args.integral)
             if not args.quiet:
@@ -293,6 +297,8 @@ elif args.merge and not args.test:
         cmd += '--originalEnergyBins '
     if args.draw:
         cmd += '--drawHistos '
+    if args.integral:
+        cmd += '--integral {} '.format(args.integral)
     if args.day:
         for index,d in enumerate(args.day):
             cmd2 = cmd + '--day '+str(d)
@@ -355,6 +361,8 @@ elif args.select:
             strDay = '0'+str(ind)
         dayint = ind
         cmd = 'python3 python/findHighFluxes.py --inputFile '+foundFile+' --data '+det
+        if args.useVersion == 'v3':
+            cmd = 'python3 python/findHighFluxes_v3.py --inputFile '+foundFile+' --data '+det
         if args.day:
             if d in args.day:
                 cmd += ' --day '+str(d)

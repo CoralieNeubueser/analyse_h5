@@ -14,7 +14,7 @@ r.gStyle.SetPadRightMargin(0.2)
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
 parser.add_argument('--data', type=str, choices=['noaa'], required=True, help='Define patht to data file.')
-parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1'], help='Define wether v1/ (no flux=0) or v2/ (all fluxes), or v2.1/ (all fluxes, summed over energy) is written.')
+parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1','v3'], help='Define wether v1/ (no flux=0) or v2/ (all fluxes), or v2.1/ (all fluxes, summed over energy) is written.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 args,_=parser.parse_known_args()
 
@@ -158,6 +158,7 @@ for evt in t:
        # print("Attention! Beq>B")
     # calculate equatorial pitch angle
     alpha_eq = getAlpha_eq( evt.alpha0sat, abs(evt.btotsat), Beq )
+    alpha_loc = evt.alpha0sat
 
     # find corresponding L/alpha bin, and use the average Lshell and alpha values 
     # only if L shell values < 10                                                                                                                                                                                       
@@ -169,13 +170,13 @@ for evt in t:
                 Lbin=il
                 break
         for ia in range(p_bins):
-            if p_x_bins[ia] <= alpha_eq and p_x_bins[ia+1] > alpha_eq:
+            if p_x_bins[ia] <= alpha_loc and p_x_bins[ia+1] > alpha_loc:
                 Albin=ia
                 break
         if Lbin==-1 or Albin==-1 :
             print('B:    ', evt.btotsat)
             print('Beq:  ', Beq)
-            print('Alpha:', alpha_eq)
+            print('Alpha:', alpha_loc)
             print('L:    ', evt.L_IGRF)
     
         for ien,en in enumerate(energyTab):

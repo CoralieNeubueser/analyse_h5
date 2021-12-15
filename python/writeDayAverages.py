@@ -22,7 +22,7 @@ parser.add_argument('--drawHistos', action='store_true', help='Tell if histogram
 #parser.add_argument('--fit', action='store_true', help='Use an exponential function to fit the distributions.')
 #parser.add_argument('--fitFunction', type=str, default='Exp', choices=['Exp','Poisson'], help='Define wich function to use for fitting of distributions.')
 parser.add_argument('--day', type=int, default=None, help='Specify a day.')
-parser.add_argument('--useVersion', type=str, default='v2', help='Specify a data input version.')
+parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1','v3'], help='Specify a data input version.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
 #parser.add_argument('--integrateEn', action='store_true', help='Merge all fluxes over all energy bins.')
 parser.add_argument('--originalEnergyBins', action='store_true', help='Use original energy binning.')

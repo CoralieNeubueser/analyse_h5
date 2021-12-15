@@ -16,7 +16,7 @@ parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
 parser.add_argument('--data', type=str, choices=['hepd','hepp_l','hepp_h'], required=True, help='Define patht to data file.')
 parser.add_argument('--channel', type=str, choices=['narrow','wide'], required=all(item[0] == 'hepp_l' for item in sys.argv), help='Define which set of detectors to use.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
-parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2'], help='Define wether v1/ (no flux=0) or v2/ (all fluxes), or v2.1/ (all fluxes, summed over energy) is written.')
+parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1','v3'], help='Define wether v1/ (no flux=0) or v2/ (all fluxes), or v2.1/ (all fluxes, summed over energy) is written.')
 parser.add_argument('--useOriginalEnergyBinning', action='store_true', help='Use fine energy binning.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 args,_=parser.parse_known_args()
@@ -183,11 +183,13 @@ for cell_l in range(0,len(l_x_bins)-1):
         vecCells[cell_l,cell_p] = r.std.vector(float)()
         tree.Branch( 'flux_'+str(l_x_bins[cell_l])+'_'+str(p_x_bins[cell_p]), vecCells[cell_l,cell_p]) 
 
-vecCellsEn = {} 
-for cell_l in range(0,len(l_x_bins)-1):
-    for cell_p in range(0,len(p_x_bins)-1):
-        vecCellsEn[cell_l,cell_p] = r.std.vector(float)()
-        tree.Branch( 'energy_'+str(l_x_bins[cell_l])+'_'+str(p_x_bins[cell_p]), vecCellsEn[cell_l,cell_p])
+# not needed when summed over energy
+if version!='v2.1':
+    vecCellsEn = {} 
+    for cell_l in range(0,len(l_x_bins)-1):
+        for cell_p in range(0,len(p_x_bins)-1):
+            vecCellsEn[cell_l,cell_p] = r.std.vector(float)()
+            tree.Branch( 'energy_'+str(l_x_bins[cell_l])+'_'+str(p_x_bins[cell_p]), vecCellsEn[cell_l,cell_p])
 
 
 print("L-alpha map has {} cells.".format(len(vecCells)))
@@ -211,6 +213,7 @@ vec_nPt = r.std.vector(int)(9)
 vecSum = defaultdict(dict)
 vecAlphaL = defaultdict(dict)
 vecPitch = defaultdict(dict)
+vecAlpha = defaultdict(dict)
 vecChannel = defaultdict(dict)
 
 countFlux = int(0)
@@ -367,12 +370,14 @@ for iev,ev in enumerate(dset2):
                 # store corresponding L/alpha values
                 if (ie_new,ip_new) in vecSum:
                     vecSum[(ie_new,ip_new)] += flux
-                    vecAlphaL[(ie_new,ip_new)] = [vecAlphaL[(ie_new,ip_new)][0]+alpha_eq, round(vecAlphaL[(ie_new,ip_new)][1]+Lshell,1), vecAlphaL[(ie_new,ip_new)][2]+1.]
+                    vecAlphaL[(ie_new,ip_new)] = [vecAlphaL[(ie_new,ip_new)][0]+Pvalue, round(vecAlphaL[(ie_new,ip_new)][1]+Lshell,1), vecAlphaL[(ie_new,ip_new)][2]+1.]
                     vecPitch[(ie_new,ip_new)] += Pvalue
+                    vecAlpha[(ie_new,ip_new)] += alpha_eq
                 else:
                     vecSum[(ie_new,ip_new)] = flux
-                    vecAlphaL[(ie_new,ip_new)] = [alpha_eq, round(Lshell,1), 1.]
+                    vecAlphaL[(ie_new,ip_new)] = [Pvalue, round(Lshell,1), 1.]
                     vecPitch[(ie_new,ip_new)] = Pvalue
+                    vecAlpha[(ie_new,ip_new)] = alpha_eq
                     vecChannel[(ie_new,ip_new)] = channel
 
                 if iev<5 and args.debug:
@@ -445,7 +450,7 @@ for iev,ev in enumerate(dset2):
         F_vecvec.push_back(value / float(countIntSec))
         E_vec.push_back(energiesRounded[key[0]])
         P_vec.push_back(int(vecPitch[key] / float(vecAlphaL[key][2]))) # normalise if 2 pitch angles ended up in same alpha cell /s
-        A_vec.push_back(vecAlphaL[key][0]/vecAlphaL[key][2]) # normalise if 2 pitch angles ended up in same alpha cell /s
+        A_vec.push_back(vecAlpha[key]/vecAlphaL[key][2]) # normalise if 2 pitch angles ended up in same alpha cell /s
         Ch_vec.push_back(vecChannel[key])
         if value!=0:
             countFlux+=1
@@ -471,6 +476,7 @@ for iev,ev in enumerate(dset2):
     # clean-up
     vecSum.clear()
     vecPitch.clear()
+    vecAlpha.clear()
     vecAlphaL.clear()
     vecChannel.clear()
     E_vec.clear()

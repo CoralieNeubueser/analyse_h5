@@ -440,7 +440,7 @@ def getEnergyBinWidth(det, energyBin):
     if det=='hepp_l':
         #enBorder=np.array([0.1, 0.28125, 0.4625, 0.64375, 0.825, 1.00625, 1.1875, 1.36875, 1.55, 1.73125, 1.9125, 2.09375, 2.275, 2.45625, 2.6375, 2.81875, 3.0])
         #enBorder=np.array(16*[0.011])
-        return 0.11 
+        return 0.01 
     elif det=='hepp_h':
         return 0.21
     else:

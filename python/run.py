@@ -178,13 +178,9 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
         if job=="":
             continue
         if args.submit:
-            exefilename = 'job_%s_%s_%s.sh'%(det,str(os.path.split(run)[1].replace('.h5','')),ijob)
-            if args.channel and args.integral:
-                exefilename = exefilename.replace('000','_int_'+str(args.integral)+'s')
-            elif args.channel:
-                exefilename = exefilename.replace('000','channel_'+str(args.channel))
-            elif args.integral:
-                exefilename = exefilename.replace('000','int_'+str(args.integral)+'s')
+            exefilename = 'job_%s_%s_%s_%s.sh'%(args.useVersion,det,str(os.path.split(run)[1].replace('.h5','')),ijob)
+            if args.integral:
+                exefilename = exefilename.replace('_000','_int_'+str(args.integral)+'s')
             exefile = writeExecutionFile(home()+'/log/'+exefilename, job)
             print("Write execution file to:", exefilename)
             args_file.write("%s\n"%(home()+'/log/'+exefilename))
@@ -255,11 +251,11 @@ elif args.merge and not args.test:
         runList = glob.glob(pathToFind+'CSES_01_HEP_'+str(index)+'_L02*.root') #CSES_01_HEP_1_*.root')
 
         if args.day:
-            pathToFind = sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'
-            if args.originalE:
-                pathToFind += 'originalEnergyBins/'
-            elif args.integral:
-                pathToFind = sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'+str(args.integral)+'s/'
+#            pathToFind = sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'
+#            if args.originalE:
+#                pathToFind += 'originalEnergyBins/'
+#            elif args.integral:
+#                pathToFind = sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'+str(args.integral)+'s/'
             for d in args.day:
                 runList = sorted( glob.glob(pathToFind+'CSES_01_HEP_'+str(index)+'_L02_*'+str(d)+'*.root'), key=lambda x:float(x[-46:-41]) )
                 mge = pathToFind+'all_'+det+'_'+str(d)+'_'+str(len(runList))+'_runs.root'
@@ -372,7 +368,9 @@ elif args.select:
             dayint = int(str(args.month)+strDay)
 
         if args.submit:
-            exefilename = 'job_%s.sh'%(str(fileSnip+str(dayint)+'.root'))
+            exefilename = 'job_%s_%s.sh'%(args.useVersion,str(fileSnip+str(dayint)+'.root'))
+            if args.integral:
+                exefilename = 'job_%s_%s_int_%s.sh'%(args.useVersion,str(fileSnip+str(dayint)+'.root'),args.integral)
             exefile = writeExecutionFile(home()+'/log/'+exefilename, cmd)
             print("Write execution file to:", exefilename)
             args_file.write("%s\n"%(home()+'/log/'+exefilename))

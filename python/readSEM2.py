@@ -254,3 +254,4 @@ for evt in t:
 
 outRoot.Write()
 outRoot.Close() 
+os.system('chmod -R g+rwx %s'%(outRootName))

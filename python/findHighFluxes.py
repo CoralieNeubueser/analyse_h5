@@ -15,7 +15,7 @@ parser.add_argument('--data', type=str, choices=['hepd','hepp_l_channel_narrow',
 parser.add_argument('--thr', type=int, default=100, help='Define minimum statistics used.')
 parser.add_argument('--sigma', type=int, default=1, help='Define minimum sigma for flux values > <phi>+sigma*phi_rms.')
 parser.add_argument('--fitted', action='store_true', help='Use exponential fit tau value for threshold.')
-parser.add_argument('--useVersion', type=str, default='v2', help='Set the version.')
+parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1','v3'], help='Set the version.')
 parser.add_argument('--day', type=int, help='Define the day of the fluxes that are suppose to be stored.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
 parser.add_argument('--tryFit', action='store_true', help='Try to fit count distributions with exponential..')
@@ -299,6 +299,7 @@ for day in days:
 inRoot.Close()
 outRoot.Write()
 outRoot.Close()
+os.system('chmod -R g+rwx %s'%(outfilename))
 
 if args.tryFit:
     # add second analysis part:

@@ -549,3 +549,4 @@ prep2D(hist2D_loc_field, 'Longitude', 'Latitude', 'B field [nT]', False)
 
 outRoot.Write()
 outRoot.Close()
+os.system('chmod -R g+rwx %s'%(outRootName))

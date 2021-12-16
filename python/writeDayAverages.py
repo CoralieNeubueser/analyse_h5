@@ -28,6 +28,7 @@ parser.add_argument('--integral', type=int, help='Define the time window for int
 parser.add_argument('--originalEnergyBins', action='store_true', help='Use original energy binning.')
 args,_=parser.parse_known_args()
 
+version=args.useVersion
 # retrieve binning on L/pitch
 numLbin, Lbins = getLbins()
 numPbin, Pbins = getPitchBins()
@@ -232,7 +233,7 @@ for d in lst:
       for ien,en in enumerate(energies):
             # get geometrcal factor for meaningful histogram binning, energy dependent flux histo binning for HEPD
             geomFactor=1.
-            flux_binWidth = getInverseGeomFactor(args.data,ien)
+            flux_binWidth = getInverseGeomFactor(args.data,ien)/getEnergyBinWidth(args.data, ien)
             geomFactor = getGeomFactor(args.data,ien)
 
             for iL,L in enumerate(Lbins[0:numLbin-1]):
@@ -266,11 +267,16 @@ for d in lst:
       pool.close()
       pool.join()
       print("Got {} histograms.. efficiency with thr={} of {:.2f}".format(len(th1ds)/3, threshold, len(th1ds)/3/count*100))
+      os.system('chmod -R g+rwx %s'%(outFileName))
       
       if args.drawHistos:
+
             # write root file with histograms
             rootOutFileName = outFileName.replace('txt','root')
             outrootfile = r.TFile.Open(rootOutFileName, "RECREATE")
+            outrootfile.mkdir( "plots" )
+            outrootfile.mkdir( "histos" )
+            outrootfile.cd( "histos" )
             # loop through list of histograms
             for ih,h in enumerate(th1ds):
                   name = h.GetName()
@@ -290,6 +296,7 @@ for d in lst:
                   thstacks[energyIndex][lIndex].Add(h)
                   if maxxs[energyIndex][lIndex] < maxValue:
                       maxxs[energyIndex][lIndex] = maxValue
+            
                   h.Write()
 
             print('legend E entries: ',len(tlegends))
@@ -320,6 +327,7 @@ for d in lst:
                                     os.makedirs(head)
 
                               outCurves = '{}/{}'.format(head,tail)
-                              #can.Print(outCurves)
+                              outrootfile.cd( "plots" )
                               can.Write()
             outrootfile.Close()    
+            os.system('chmod -R g+rwx %s'%(rootOutFileName))

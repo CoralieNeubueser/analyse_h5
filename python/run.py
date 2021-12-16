@@ -7,7 +7,7 @@ parser.add_argument('--hepd', action='store_true', help='Analyse HEPD data.')
 parser.add_argument('--hepp_l', action='store_true', help='Analyse HEPP-L data.')
 parser.add_argument('--hepp_h', action='store_true', help='Analyse HEPP-H data.')
 parser.add_argument('--noaa', action='store_true', help='Analyse NOAA data.')
-parser.add_argument('--channel', type=str, required= '--hepp_l' in sys.argv,  choices=['narrow','wide'], help='Choose narrow or wide channels to be read.')
+parser.add_argument('--channel', type=str, required= '--hepp_l' in sys.argv,  choices=['narrow','wide','all'], help='Choose narrow, wide, or all channels to be read.')
 ### ACTIONS
 ### defaults action reads h5 and writes out root files
 parser.add_argument('--numRuns', type=int, help='Define number of runs to be analysed.', required=True)
@@ -35,7 +35,7 @@ parser.add_argument('--test', action='store_true', help='Analyse test runs.')
 parser.add_argument('--day', type=int, nargs='+', required=False, help='Merge orbits of a specific day [yyyymmdd].')
 parser.add_argument('--month', type=int, required=False, help='Merge orbits of a specific month [yyyymm].')
 
-parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1','v3'], help='Define wether flux=0 is stored.')
+parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1','v3','v3.1'], help='Define wether flux=0 is stored.')
 parser.add_argument('--submit', action='store_true', help='Submit to HTCondor batch farm.')
 parser.add_argument('-q','--quiet', action='store_true', help='Run without printouts.')
 args,_=parser.parse_known_args()
@@ -46,9 +46,18 @@ os.system('source /opt/exp_software/limadou/set_env_standalone.sh')
 if args.EQlist:
     readEQlist()
 
+version = args.useVersion
 det = 'hepd'
 data = 'hepd'
 datapaths = []
+
+if args.noaa and version!='v2.1' and version!='v3.1':
+    if version=='v2':
+        version = 'v2.1'
+    else:
+        version = 'v3.1'
+    print("NOAA data always contains fluxes with energy threshold.. version is set to: %s"%(version))
+
 if args.hepd:
     # run all orbits in August 2018
     datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*'+str(args.month)+'*.h5')
@@ -127,13 +136,13 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
             print('Try next run..')
             continue
 
-        buildPath = sharedOutPath()+"data/root/"+args.useVersion+"/"+det+'/'
+        buildPath = sharedOutPath()+"data/root/"+version+"/"+det+'/'
         if args.originalE:
             buildPath += "originalEnergyBins/"
         if args.integral:
             buildPath += str(args.integral)+"s/"
         if args.test:
-            buildPath = sharedOutPath()+"data/root/"+args.useVersion+"/"
+            buildPath = sharedOutPath()+"data/root/"+version+"/"
             outRootDir = os.path.split(run)[0]
             outfile = buildPath+"/L3_test/"+os.path.split(outRootDir)[1]+'/'+(os.path.split(run)[1]).replace("h5","root")
         else:
@@ -148,13 +157,13 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
             if not os.path.isdir(buildPath):
                 os.makedirs(buildPath)
             cmd='python3 python/readH5.py --inputFile '+str(run)
-            if args.useVersion == 'v2.1':
+            if version == 'v2.1':
                 cmd='python3 python/readH5_v2.1.py --inputFile '+str(run)
-            elif args.useVersion == 'v3':
+            elif version == 'v3':
                 cmd='python3 python/readH5_v3.py --inputFile '+str(run)
             if det=='noaa':
                 cmd='python3 python/readSEM2.py --data noaa --inputFile '+str(run)
-                if args.useVersion == 'v3':
+                if version == 'v3.1':
                     cmd='python3 python/readSEM2_v3.py --data noaa --inputFile '+str(run)
             if args.integral:
                 cmd+=' --integral '+str(args.integral)
@@ -166,8 +175,8 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
                 cmd+=' --data hepp_l --channel '+args.channel
             elif args.hepp_h:
                 cmd+=' --data hepp_h'
-            if args.useVersion is not 'v2':
-                cmd+=' --useVersion '+args.useVersion
+            if version is not 'v2':
+                cmd+=' --useVersion '+version
             if args.originalE:
                 cmd+=' --useOriginalEnergyBinning '
             print(cmd)
@@ -178,7 +187,7 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
         if job=="":
             continue
         if args.submit:
-            exefilename = 'job_%s_%s_%s_%s.sh'%(args.useVersion,det,str(os.path.split(run)[1].replace('.h5','')),ijob)
+            exefilename = 'job_%s_%s_%s_%s.sh'%(version,det,str(os.path.split(run)[1].replace('.h5','')),ijob)
             if args.integral:
                 exefilename = exefilename.replace('_000','_int_'+str(args.integral)+'s')
             exefile = writeExecutionFile(home()+'/log/'+exefilename, job)
@@ -194,7 +203,7 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
         
 # run analysis on single merged root file
 elif args.ana and not args.test:
-    mge = sharedOutPath()+'data/root/'+args.useVersion+'/all_hepd_'+str(runs)+'runs.root'
+    mge = sharedOutPath()+'data/root/'+version+'/all_hepd_'+str(runs)+'runs.root'
     print("Run analysis on single file: ", str(mge))
 
     # open root file
@@ -204,8 +213,8 @@ elif args.ana and not args.test:
 elif args.ana and args.test:
     tests=['L3h5_orig', 'L3h5_rate', 'L3h5_05_95', 'L3h5_rate_05_95']
     for t in tests:
-        mge = sharedOutPath()+"data/root/"+args.useVersion+"/L3_test/"+t+'/all.root'
-        mge = 'data/root/'+args.useVersion+'/all_hepd_'+str(runs)+'runs.root'
+        mge = sharedOutPath()+"data/root/"+version+"/L3_test/"+t+'/all.root'
+        mge = 'data/root/'+version+'/all_hepd_'+str(runs)+'runs.root'
         print("Run analysis on single file: ", str(mge))
 
         # open root file 
@@ -220,32 +229,32 @@ elif args.merge and not args.test:
 
     if args.hepd:
         # write 
-        mge = sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd.root'
+        mge = sharedOutPath()+'data/root/'+version+'/hepd/all_hepd.root'
         runList = []
         if args.day:
             for d in args.day:
-                runList = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/CSES_HEP_DDD_*'+str(d)+'*.root')
-                mge = sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(d)+'_'+str(len(runList))+'_runs.root'
-                findOld = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(d)+'*.root')
+                runList = glob.glob(sharedOutPath()+'data/root/'+version+'/hepd/CSES_HEP_DDD_*'+str(d)+'*.root')
+                mge = sharedOutPath()+'data/root/'+version+'/hepd/all_hepd_'+str(d)+'_'+str(len(runList))+'_runs.root'
+                findOld = glob.glob(sharedOutPath()+'data/root/'+version+'/hepd/all_hepd_'+str(d)+'*.root')
                 runs = len(runList)
         elif args.month:
-            runList = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/CSES_HEP_DDD_*'+str(args.month)+'*.root')
-            mge = sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(args.month)+'_'+str(len(runList))+'_runs.root'
-            findOld = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/all_hepd_'+str(args.month)+'*')
+            runList = glob.glob(sharedOutPath()+'data/root/'+version+'/hepd/CSES_HEP_DDD_*'+str(args.month)+'*.root')
+            mge = sharedOutPath()+'data/root/'+version+'/hepd/all_hepd_'+str(args.month)+'_'+str(len(runList))+'_runs.root'
+            findOld = glob.glob(sharedOutPath()+'data/root/'+version+'/hepd/all_hepd_'+str(args.month)+'*')
             runs = len(runList)
         else:
-            runList = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/hepd/CSES_HEP_DDD_*.root')
+            runList = glob.glob(sharedOutPath()+'data/root/'+version+'/hepd/CSES_HEP_DDD_*.root')
             runs = len(runList)
 
     elif args.hepp_l or args.hepp_h: 
         index=1
         if args.hepp_h:
             index=2
-        pathToFind = sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'
+        pathToFind = sharedOutPath()+'data/root/'+version+'/'+det+'/'
         if args.originalE:
             pathToFind += 'originalEnergyBins/'
         elif args.integral:
-            pathToFind = sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'+str(args.integral)+'s/'
+            pathToFind = sharedOutPath()+'data/root/'+version+'/'+det+'/'+str(args.integral)+'s/'
 
         mge = pathToFind+'all_'+det+'.root'
         runList = glob.glob(pathToFind+'CSES_01_HEP_'+str(index)+'_L02*.root') #CSES_01_HEP_1_*.root')
@@ -264,7 +273,7 @@ elif args.merge and not args.test:
 
     elif args.noaa:
         runs=0
-        pathToFind=sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'
+        pathToFind=sharedOutPath()+'data/root/'+version+'/'+det+'/'
         if args.day:
             for d in args.day:
                 mge = pathToFind+'poes_n19_'+str(d)+'_proc.nc.root' 
@@ -288,7 +297,7 @@ elif args.merge and not args.test:
     #for ifile in runList:
     #    cmd += ifile+' '
     #cmd += '\n'
-    cmd = 'python3 python/writeDayAverages.py --useVersion '+args.useVersion+' --inputFile '+mge+' --data '+det+' '
+    cmd = 'python3 python/writeDayAverages.py --useVersion '+version+' --inputFile '+mge+' --data '+det+' '
     if args.originalE:
         cmd += '--originalEnergyBins '
     if args.draw:
@@ -308,10 +317,10 @@ elif args.merge and args.test:
 
     tests=['L3_repro'] #'L3h5_orig', 'L3h5_rate', 'L3h5_05_95', 'L3h5_rate_05_95']
     for t in tests:    
-        mge = sharedOutPath()+"data/root/"+args.useVersion+"/L3_test/"+t+'/all.root'
+        mge = sharedOutPath()+"data/root/"+version+"/L3_test/"+t+'/all.root'
         if args.day:
-            mge = sharedOutPath()+"data/root/"+args.useVersion+"/L3_test/"+t+'/all_'+str(args.day)+'.root'
-            runList = sorted( glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/L3_test/'+t+'/CSES_*'+str(args.day)+'*.root'), key=lambda x:float(x[-10:-4]))
+            mge = sharedOutPath()+"data/root/"+version+"/L3_test/"+t+'/all_'+str(args.day)+'.root'
+            runList = sorted( glob.glob(sharedOutPath()+'data/root/'+version+'/L3_test/'+t+'/CSES_*'+str(args.day)+'*.root'), key=lambda x:float(x[-10:-4]))
         runs = len(runList)
         if runs>0:
             print("Merge files in: ", mge)
@@ -342,13 +351,13 @@ elif args.select:
             strday = str(iday)
             if iday < 10:
                 strday = '0'+str(iday)
-            print( sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/'+fileSnip+str(args.month)+strday+'*.root' )
-            found = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/'+fileSnip+str(args.month)+strday+'*.root')
+            print( sharedOutPath()+'data/root/'+version+'/'+detPath+'/'+fileSnip+str(args.month)+strday+'*.root' )
+            found = glob.glob(sharedOutPath()+'data/root/'+version+'/'+detPath+'/'+fileSnip+str(args.month)+strday+'*.root')
             for every in found:
                 findFile.append( every )
     elif args.day:
         for d in args.day:
-            findFile = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/'+fileSnip+str(d)+'*.root')
+            findFile = glob.glob(sharedOutPath()+'data/root/'+version+'/'+detPath+'/'+fileSnip+str(d)+'*.root')
 
     for ind,foundFile in enumerate(findFile):
         ind+=1
@@ -357,7 +366,7 @@ elif args.select:
             strDay = '0'+str(ind)
         dayint = ind
         cmd = 'python3 python/findHighFluxes.py --inputFile '+foundFile+' --data '+det
-        if args.useVersion == 'v3':
+        if version == 'v3' or version == 'v3.1':
             cmd = 'python3 python/findHighFluxes_v3.py --inputFile '+foundFile+' --data '+det
         if args.day:
             if d in args.day:
@@ -368,9 +377,9 @@ elif args.select:
             dayint = int(str(args.month)+strDay)
 
         if args.submit:
-            exefilename = 'job_%s_%s.sh'%(args.useVersion,str(fileSnip+str(dayint)+'.root'))
+            exefilename = 'job_%s_%s.sh'%(version,str(fileSnip+str(dayint)+'.root'))
             if args.integral:
-                exefilename = 'job_%s_%s_int_%s.sh'%(args.useVersion,str(fileSnip+str(dayint)+'.root'),args.integral)
+                exefilename = 'job_%s_%s_int_%s.sh'%(version,str(fileSnip+str(dayint)+'.root'),args.integral)
             exefile = writeExecutionFile(home()+'/log/'+exefilename, cmd)
             print("Write execution file to:", exefilename)
             args_file.write("%s\n"%(home()+'/log/'+exefilename))
@@ -386,7 +395,7 @@ elif args.cluster:
     findFile = []
     detPath = det
     fileSnip = 'all_highFluxes_'+det+'_'
-    thresholdDir = sharedOutPath()+'data/thresholds/'+args.useVersion+'/'+detPath+'/'
+    thresholdDir = sharedOutPath()+'data/thresholds/'+version+'/'+detPath+'/'
     thresholdFile = thresholdDir+'thresholds_'+str(args.month)+'.pkl'
     clusterInput = ''
     cmdTot=''
@@ -396,11 +405,11 @@ elif args.cluster:
             strday = str(iday)
             if iday < 10:
                 strday = '0'+str(iday)
-            found = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/'+fileSnip+str(args.month)+strday+'*.root')
+            found = glob.glob(sharedOutPath()+'data/root/'+version+'/'+detPath+'/'+fileSnip+str(args.month)+strday+'*.root')
             for every in found:
                 findFile.append( every )
     else:
-        findFile = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/'+fileSnip+str(args.day)+'*.root')
+        findFile = glob.glob(sharedOutPath()+'data/root/'+version+'/'+detPath+'/'+fileSnip+str(args.day)+'*.root')
         thresholdFile = thresholdDir+'thresholds_'+str(args.day)+'.pkl'
         clusterInput = findFile[0]
 
@@ -425,7 +434,7 @@ elif args.cluster:
 
     # 2. merge into month
     if args.month:
-        mge = sharedOutPath()+"data/root/"+args.useVersion+'/'+detPath+'/'+fileSnip+str(args.month)+'.root'
+        mge = sharedOutPath()+"data/root/"+version+'/'+detPath+'/'+fileSnip+str(args.month)+'.root'
         clusterInput = mge
         if not os.path.isfile( mge ):
             os.system('hadd -f -k '+mge+' '+str(findFile).replace(']','').replace('[','').replace(',',' '))
@@ -441,9 +450,9 @@ elif args.cluster:
             clusteredIn += args.onlyIn
     else:
         clusteredIn += 'Only'
-    clusterOutdir = sharedOutPath()+'data/root/{0}/{1}/{2}/{3}/{4}s_window/{5}_seeds/'.format(args.useVersion,detPath,clusteredIn,args.cut,args.window,args.seeds)
+    clusterOutdir = sharedOutPath()+'data/root/{0}/{1}/{2}/{3}/{4}s_window/{5}_seeds/'.format(version,detPath,clusteredIn,args.cut,args.window,args.seeds)
     if args.doubleSeed:
-        clusterOutdir = sharedOutPath()+'data/root/{0}/{1}/{2}/{3}/{4}s_window/{5}_subs_seeds/'.format(args.useVersion,detPath,clusteredIn,args.cut,args.window,args.seeds)
+        clusterOutdir = sharedOutPath()+'data/root/{0}/{1}/{2}/{3}/{4}s_window/{5}_subs_seeds/'.format(version,detPath,clusteredIn,args.cut,args.window,args.seeds)
 
     if not os.path.exists( clusterOutdir ):
         print("Directory is created: ", clusterOutdir)
@@ -491,7 +500,7 @@ if args.clean:
     elif args.integral:
         detPath+='/'+str(args.integral)+'s'
 
-    datapaths = glob.glob(sharedOutPath()+'data/root/'+args.useVersion+'/'+detPath+'/*000.root')
+    datapaths = glob.glob(sharedOutPath()+'data/root/'+version+'/'+detPath+'/*000.root')
     if not (args.hepp_l or args.hepp_h):
         print("Clean-up only necessary for HEPP data. ")
         datapaths = []

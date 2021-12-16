@@ -14,7 +14,7 @@ r.gStyle.SetPadRightMargin(0.2)
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
 parser.add_argument('--data', type=str, choices=['hepd','hepp_l','hepp_h'], required=True, help='Define patht to data file.')
-parser.add_argument('--channel', type=str, choices=['narrow','wide'], required=all(item[0] == 'hepp_l' for item in sys.argv), help='Define which set of detectors to use.')
+parser.add_argument('--channel', type=str, choices=['narrow','wide','all'], required=all(item[0] == 'hepp_l' for item in sys.argv), help='Define which set of detectors to use.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
 parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2'], help='Define wether v1/ (no flux=0) or v2/ (all fluxes), or v2.1/ (all fluxes, summed over energy) is written.')
 parser.add_argument('--useOriginalEnergyBinning', action='store_true', help='Use fine energy binning.')
@@ -314,7 +314,7 @@ for iev,ev in enumerate(dset2):
                         continue
                     elif not ip&1 and args.channel=='wide':
                         # gerade: narrow opening angle
-                        continue
+                        continue                        
 
                 # rebin the HEPP-H entries from 36 to 9
                 if args.data == 'hepp_h':

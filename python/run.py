@@ -60,10 +60,10 @@ if args.noaa and version!='v2.1' and version!='v3.1':
 
 if args.hepd:
     # run all orbits in August 2018
-    datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*'+str(args.month)+'*.h5')
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*{0}*.h5'.format(args.month))
     if args.day:
         for d in args.day:
-            datapaths += glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*'+str(d)+'*.h5')
+            datapaths += glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3h5/*{0}*.h5'.format(d))
     if args.test:
         #datapaths = glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3h5_orig/*.h5')
         #datapaths += glob.glob('/storage/gpfs_data/limadou/data/flight_data/L3_test/L3h5_rate/*.h5')
@@ -75,10 +75,10 @@ elif args.hepp_l:
     data = 'hepp_l'
     det = 'hepp_l_channel_'+args.channel
     # get HEPP data of quiet period 1.-5.08.2018
-    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*_'+str(args.month)+'*.h5') #('/storage/gpfs_data/limadou/data/flight_data/analysis/data/h5/HEPP_august_2018/*.h5')
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*_{0}*.h5'.format(args.month)) #('/storage/gpfs_data/limadou/data/flight_data/analysis/data/h5/HEPP_august_2018/*.h5')
     if args.day:
         for d in args.day:
-            datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*_'+str(d)+'*.h5')
+            datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*_{0}*.h5'.format(d))
     # select HEPP data from 22-26.02.2019 (solar quiet period) 
     #datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190222*.h5')
     #datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190223*.h5')
@@ -89,17 +89,17 @@ elif args.hepp_h:
     data = 'hepp_h'
     det = 'hepp_h'
     # get HEPP data of quiet period 1.-5.08.2018
-    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*'+str(args.month)+'*.h5')
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*{0}*.h5'.format(args.month))
     if args.day:
         for d in args.day:
-            datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*'+str(d)+'*.h5')
+            datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*{0}*.h5'.format(d))
 elif args.noaa:
     data = 'noaa'
     det = 'noaa'
-    datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data/poes_n19_'+str(args.month)+'*_proc.nc.root')
+    datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data/poes_n19_{0}*_proc.nc.root'.format(args.month))
     if args.day:
         for d in args.day:
-            datapaths += glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data/poes_n19_'+str(d)+'_proc.nc.root')
+            datapaths += glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data/poes_n19_{0}_proc.nc.root'.format(d))
 
 # sort files by time
 datapaths.sort(key=os.path.getmtime)
@@ -132,19 +132,19 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
             duration = abs(int(OrbitDateTime[6]) - int(OrbitDateTime[4]))
 
         if duration < 3000: ## half-orbit not completed
-            print('Not full semi-orbit recorded, but only: '+str(duration)+'[mmss]')
+            print('Not full semi-orbit recorded, but only: {0}[mmss]'.format(duration))
             print('Try next run..')
             continue
 
-        buildPath = sharedOutPath()+"data/root/"+version+"/"+det+'/'
+        buildPath = '{0}data/root/{1}/{2}/'.format(sharedOutPath(),version,det)
         if args.originalE:
             buildPath += "originalEnergyBins/"
         if args.integral:
             buildPath += str(args.integral)+"s/"
         if args.test:
-            buildPath = sharedOutPath()+"data/root/"+version+"/"
+            buildPath = '{0}data/root/{1}/'.format(sharedOutPath(),version)
             outRootDir = os.path.split(run)[0]
-            outfile = buildPath+"/L3_test/"+os.path.split(outRootDir)[1]+'/'+(os.path.split(run)[1]).replace("h5","root")
+            outfile = '{0}/L3_test/{1}/{2}'.format(buildPath,os.path.split(outRootDir)[1],os.path.split(run)[1].replace("h5","root"))
         else:
             outfile = buildPath+(os.path.split(run)[1]).replace("h5","root")
         print(outfile)
@@ -203,7 +203,7 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
         
 # run analysis on single merged root file
 elif args.ana and not args.test:
-    mge = sharedOutPath()+'data/root/'+version+'/all_hepd_'+str(runs)+'runs.root'
+    mge = '{0}data/root/{1}/all_hepd_{2}runs.root'.format(sharedOutPath(),version,runs)
     print("Run analysis on single file: ", str(mge))
 
     # open root file
@@ -213,8 +213,8 @@ elif args.ana and not args.test:
 elif args.ana and args.test:
     tests=['L3h5_orig', 'L3h5_rate', 'L3h5_05_95', 'L3h5_rate_05_95']
     for t in tests:
-        mge = sharedOutPath()+"data/root/"+version+"/L3_test/"+t+'/all.root'
-        mge = 'data/root/'+version+'/all_hepd_'+str(runs)+'runs.root'
+        mge = '{0}data/root/{1}/L3_test/{2}/all.root'.format(sharedOutPath(),version,t)
+        mge = 'data/root/{0}/all_hepd_{1}runs.root'.format(version,runs)
         print("Run analysis on single file: ", str(mge))
 
         # open root file 
@@ -229,54 +229,49 @@ elif args.merge and not args.test:
 
     if args.hepd:
         # write 
-        mge = sharedOutPath()+'data/root/'+version+'/hepd/all_hepd.root'
+        mge = '{0}data/root/{1}/hepd/all_hepd.root'.format(sharedOutPath(),version)
         runList = []
         if args.day:
             for d in args.day:
-                runList = glob.glob(sharedOutPath()+'data/root/'+version+'/hepd/CSES_HEP_DDD_*'+str(d)+'*.root')
-                mge = sharedOutPath()+'data/root/'+version+'/hepd/all_hepd_'+str(d)+'_'+str(len(runList))+'_runs.root'
-                findOld = glob.glob(sharedOutPath()+'data/root/'+version+'/hepd/all_hepd_'+str(d)+'*.root')
+                runList = glob.glob('{0}data/root/{1}/hepd/CSES_HEP_DDD_*{2}*.root'.format(sharedOutPath(),version,d))
+                mge = '{0}data/root/{1}/hepd/all_hepd_{2}_{3}_runs.root'.format(sharedOutPath(),version,d,len(runList))
+                findOld = glob.glob('{0}data/root/{1}/hepd/all_hepd_{2}*.root'.format(sharedOutPath(),version,d))
                 runs = len(runList)
         elif args.month:
-            runList = glob.glob(sharedOutPath()+'data/root/'+version+'/hepd/CSES_HEP_DDD_*'+str(args.month)+'*.root')
-            mge = sharedOutPath()+'data/root/'+version+'/hepd/all_hepd_'+str(args.month)+'_'+str(len(runList))+'_runs.root'
-            findOld = glob.glob(sharedOutPath()+'data/root/'+version+'/hepd/all_hepd_'+str(args.month)+'*')
+            runList = glob.glob('{0}data/root/{1}/hepd/CSES_HEP_DDD_*{2}*.root'.format(sharedOutPath(),version,args.month))
+            mge = '{0}data/root/{1}/hepd/all_hepd_{2}_{3}_runs.root'.format(sharedOutPath(),version,args.month,len(runList))
+            findOld = glob.glob('{0}data/root/{1}/hepd/all_hepd_{2}*'.format(sharedOutPath(),version,args.month))
             runs = len(runList)
         else:
-            runList = glob.glob(sharedOutPath()+'data/root/'+version+'/hepd/CSES_HEP_DDD_*.root')
+            runList = glob.glob('{0}data/root/{1}/hepd/CSES_HEP_DDD_*.root'.format(sharedOutPath(),version))
             runs = len(runList)
 
     elif args.hepp_l or args.hepp_h: 
         index=1
         if args.hepp_h:
             index=2
-        pathToFind = sharedOutPath()+'data/root/'+version+'/'+det+'/'
+        pathToFind = '{0}data/root/{1}/{2}/'.format(sharedOutPath(),version,det)
         if args.originalE:
             pathToFind += 'originalEnergyBins/'
         elif args.integral:
-            pathToFind = sharedOutPath()+'data/root/'+version+'/'+det+'/'+str(args.integral)+'s/'
+            pathToFind = '{0}data/root/{1}/{2}/{3}s/'.format(sharedOutPath(),version,det,args.integral)
 
         mge = pathToFind+'all_'+det+'.root'
-        runList = glob.glob(pathToFind+'CSES_01_HEP_'+str(index)+'_L02*.root') #CSES_01_HEP_1_*.root')
+        runList = glob.glob('{0}CSES_01_HEP_{1}_L02*.root'.format(pathToFind,index))
 
         if args.day:
-#            pathToFind = sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'
-#            if args.originalE:
-#                pathToFind += 'originalEnergyBins/'
-#            elif args.integral:
-#                pathToFind = sharedOutPath()+'data/root/'+args.useVersion+'/'+det+'/'+str(args.integral)+'s/'
             for d in args.day:
-                runList = sorted( glob.glob(pathToFind+'CSES_01_HEP_'+str(index)+'_L02_*'+str(d)+'*.root'), key=lambda x:float(x[-46:-41]) )
-                mge = pathToFind+'all_'+det+'_'+str(d)+'_'+str(len(runList))+'_runs.root'
-                findOld = glob.glob(pathToFind+'all_'+det+'_'+str(d)+'*.root')
+                runList = sorted( glob.glob('{0}CSES_01_HEP_{1}_L02_*{2}*.root'.format(pathToFind,index,d)), key=lambda x:float(x[-46:-41]) )
+                mge = '{0}all_{1}_{2}_{3}_runs.root'.format(pathToFind,det,d,len(runList))
+                findOld = glob.glob('{0}all_{1}_{2}*.root'.format(pathToFind,det,d))
                 runs = len(runList)
 
     elif args.noaa:
         runs=0
-        pathToFind=sharedOutPath()+'data/root/'+version+'/'+det+'/'
+        pathToFind='{0}data/root/{1}/{2}/'.format(sharedOutPath(),version,det)
         if args.day:
             for d in args.day:
-                mge = pathToFind+'poes_n19_'+str(d)+'_proc.nc.root' 
+                mge = '{0}poes_n19_{1}_proc.nc.root'.format(pathToFind,d) 
         
     oldruns=0
     if len(findOld)>0:
@@ -297,7 +292,7 @@ elif args.merge and not args.test:
     #for ifile in runList:
     #    cmd += ifile+' '
     #cmd += '\n'
-    cmd = 'python3 python/writeDayAverages.py --useVersion '+version+' --inputFile '+mge+' --data '+det+' '
+    cmd = 'python3 python/writeDayAverages.py --useVersion {0} --inputFile {1} --data {2} '.format(version, mge, det)
     if args.originalE:
         cmd += '--originalEnergyBins '
     if args.draw:
@@ -317,16 +312,16 @@ elif args.merge and args.test:
 
     tests=['L3_repro'] #'L3h5_orig', 'L3h5_rate', 'L3h5_05_95', 'L3h5_rate_05_95']
     for t in tests:    
-        mge = sharedOutPath()+"data/root/"+version+"/L3_test/"+t+'/all.root'
+        mge = "{0}data/root/{1}/L3_test/{2}/all.root".format(sharedOutPath(), version, t)
         if args.day:
-            mge = sharedOutPath()+"data/root/"+version+"/L3_test/"+t+'/all_'+str(args.day)+'.root'
-            runList = sorted( glob.glob(sharedOutPath()+'data/root/'+version+'/L3_test/'+t+'/CSES_*'+str(args.day)+'*.root'), key=lambda x:float(x[-10:-4]))
+            mge = '{0}data/root/{1}/L3_test/{2}/all_{3}.root'.format(sharedOutPath(),version,t,args.day)
+            runList = sorted( glob.glob('{0}data/root/{1}/L3_test/{2}/CSES_*{3}*.root'.format(sharedOutPath(),version,t,args.day)), key=lambda x:float(x[-10:-4]))
         runs = len(runList)
         if runs>0:
             print("Merge files in: ", mge)
             merge(mge, runList, runs, args.allHists)
  
-        cmd = 'python3 python/writeDayAverages.py --drawHistos --inputFile '+mge
+        cmd = 'python3 python/writeDayAverages.py --drawHistos --inputFile {0}'.format(mge)
         if args.hepd:
             cmd += ' --data hepd '
         if args.day:
@@ -340,7 +335,7 @@ elif args.select:
 
     findFile = []
     detPath = det
-    fileSnip = 'all_'+det+'_'
+    fileSnip = 'all_{0}_'.format(det)
     if det=='noaa':
         fileSnip = 'poes_n19_'
     if args.test:
@@ -351,13 +346,13 @@ elif args.select:
             strday = str(iday)
             if iday < 10:
                 strday = '0'+str(iday)
-            print( sharedOutPath()+'data/root/'+version+'/'+detPath+'/'+fileSnip+str(args.month)+strday+'*.root' )
-            found = glob.glob(sharedOutPath()+'data/root/'+version+'/'+detPath+'/'+fileSnip+str(args.month)+strday+'*.root')
+            print( '{0}data/root/{1}/{2}/{3}{4}{5}*.root'.format(sharedOutPath(),version,detPath,fileSnip,args.month,strday) )
+            found = glob.glob('{0}data/root/{1}/{2}/{3}{4}{5}*.root'.format(sharedOutPath(),version,detPath,fileSnip,args.month,strday))
             for every in found:
                 findFile.append( every )
     elif args.day:
         for d in args.day:
-            findFile = glob.glob(sharedOutPath()+'data/root/'+version+'/'+detPath+'/'+fileSnip+str(d)+'*.root')
+            findFile = glob.glob('{0}data/root/{1}/{2}/{3}{4}*.root'.format(sharedOutPath(),version,detPath,fileSnip,d))
 
     for ind,foundFile in enumerate(findFile):
         ind+=1
@@ -365,9 +360,9 @@ elif args.select:
         if ind<10:
             strDay = '0'+str(ind)
         dayint = ind
-        cmd = 'python3 python/findHighFluxes.py --inputFile '+foundFile+' --data '+det
+        cmd = 'python3 python/findHighFluxes.py --inputFile {0} --data {1}'.format(foundFile,det)
         if version == 'v3' or version == 'v3.1':
-            cmd = 'python3 python/findHighFluxes_v3.py --inputFile '+foundFile+' --data '+det
+            cmd = 'python3 python/findHighFluxes_v3.py --inputFile {0} --data {1}'.format(foundFile,det)
         if args.day:
             if d in args.day:
                 cmd += ' --day '+str(d)
@@ -394,9 +389,9 @@ elif args.cluster:
 
     findFile = []
     detPath = det
-    fileSnip = 'all_highFluxes_'+det+'_'
-    thresholdDir = sharedOutPath()+'data/thresholds/'+version+'/'+detPath+'/'
-    thresholdFile = thresholdDir+'thresholds_'+str(args.month)+'.pkl'
+    fileSnip = 'all_highFluxes_%s_'%{det}
+    thresholdDir = '{0}data/thresholds/{1}/{2}/'.format(sharedOutPath(),version,detPath)
+    thresholdFile = '{0}thresholds_{1}.pkl'.format(thresholdDir,args.month)
     clusterInput = ''
     cmdTot=''
 
@@ -405,12 +400,12 @@ elif args.cluster:
             strday = str(iday)
             if iday < 10:
                 strday = '0'+str(iday)
-            found = glob.glob(sharedOutPath()+'data/root/'+version+'/'+detPath+'/'+fileSnip+str(args.month)+strday+'*.root')
+            found = glob.glob('{0}data/root/{1}/{2}/{3}{4}{5}*.root'.format(sharedOutPath(),version,detPath,fileSnip,args.month,strday))
             for every in found:
                 findFile.append( every )
     else:
-        findFile = glob.glob(sharedOutPath()+'data/root/'+version+'/'+detPath+'/'+fileSnip+str(args.day)+'*.root')
-        thresholdFile = thresholdDir+'thresholds_'+str(args.day)+'.pkl'
+        findFile = glob.glob('{0}data/root/{1}/{2}/{3}{4}*.root'.format(sharedOutPath(),version,detPath,fileSnip,args.day))
+        thresholdFile = '{0}thresholds_{1}.pkl'.format(thresholdDir,args.day)
         clusterInput = findFile[0]
 
     # 1. write thresholds 
@@ -434,10 +429,10 @@ elif args.cluster:
 
     # 2. merge into month
     if args.month:
-        mge = sharedOutPath()+"data/root/"+version+'/'+detPath+'/'+fileSnip+str(args.month)+'.root'
+        mge = '{0}data/root/{1}/{2}/{3}{4}.root'.format(sharedOutPath(),version,detPath,fileSnip,args.month)
         clusterInput = mge
         if not os.path.isfile( mge ):
-            os.system('hadd -f -k '+mge+' '+str(findFile).replace(']','').replace('[','').replace(',',' '))
+            os.system('hadd -f -k {0} {1}'.format(mge, str(findFile).replace(']','').replace('[','').replace(',',' ')))
 
     # 3. run clustering
     alreadyDone=False
@@ -500,7 +495,7 @@ if args.clean:
     elif args.integral:
         detPath+='/'+str(args.integral)+'s'
 
-    datapaths = glob.glob(sharedOutPath()+'data/root/'+version+'/'+detPath+'/*000.root')
+    datapaths = glob.glob('{0}data/root/{1}/{2}/*000.root'.format(sharedOutPath(),version,detPath))
     if not (args.hepp_l or args.hepp_h):
         print("Clean-up only necessary for HEPP data. ")
         datapaths = []

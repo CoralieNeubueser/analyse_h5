@@ -15,7 +15,7 @@ r.gStyle.SetPadTopMargin(0.05);
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
-parser.add_argument('--data', type=str, choices=['hepd','hepp_l_channel_narrow','hepp_l_channel_wide','hepp_h','noaa'], required=True, help='Define patht to data file.')
+parser.add_argument('--data', type=str, choices=['hepd','hepp_l_channel_narrow','hepp_l_channel_wide','hepp_l_channel_all','hepp_h','noaa'], required=True, help='Define patht to data file.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 parser.add_argument('--threshold', type=int, default=100, help='Pick a number as minimum statistic in histograms.')
 parser.add_argument('--drawHistos', action='store_true', help='Tell if histograms should be drawn.')
@@ -193,6 +193,7 @@ print("For energies: ", energies)
 
 flux_bins, flux_binWidth = getFluxBins(det)
 count_bins = getCountsBins(det)
+print(count_bins)
 
 outFilePath = '{0}/data/averages/{1}/{2}/'.format(sharedOutPath(),args.useVersion,args.data)
 if args.integral:

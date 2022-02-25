@@ -410,28 +410,27 @@ def getGeomFactor(det,energyBin):
         ele_corr_GF = 16*[0.12] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
     elif det=='hepp_l_channel_wide':
         ele_corr_GF = 16*[0.73] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+    # the geometrical factor is mixed between the channels.. use the smallest.
+    elif det=='hepp_l_channel_all':
+        ele_corr_GF = 16*[0.12]
     # unknown geometrical factors.. for HEPP-H and NOAA-POES19
     elif det=='hepp_h':
         ele_corr_GF = 16*[1.] 
     elif det=='noaa':
-        ele_corr_GF = 4*[1.]
+        # taken from https://www.ngdc.noaa.gov/stp/satellite/poes/docs/NGDC/MEPED%20telescope%20processing%20ATBD_V1.pdf
+        # found 17.01.2022
+        #ele_corr_GF = [100./1.24, 100./1.44, 100./0.75, 100./0.55]
+        ele_corr_GF = [1.24, 1.44, 0.75, 0.55]
     return ele_corr_GF[energyBin]
 
 def getInverseGeomFactor(det,energyBin):
+    ele_corr_GF = getGeomFactor(det,energyBin)
     if det=='hepd':
         # reverse correction, and use original factor
         ele_GF = [ 0.76, 188.26, 326.64, 339.65, 344.99, 331.83, 304.73, 263.56, 217.33, 169.48, 117.31, 71.45 ]
         return getGeomCorr(det,energyBin) / ele_GF[energyBin]
-    elif det=='hepp_l_channel_narrow':
-        ele_corr_GF = 16*[0.12]
-        return 1./ele_corr_GF[energyBin]
-    elif det=='hepp_l_channel_wide':
-        ele_corr_GF = 16*[0.73]
-        return 1./ele_corr_GF[energyBin]
-    elif det=='noaa':
-        return 1
     else:
-        return 0.
+        return 1./ele_corr_GF
 
 # returns the energy bin width, used to normalise fluxes to counts/s/cm2/sr/MeV 
 def getEnergyBinWidth(det, energyBin):
@@ -459,7 +458,9 @@ def getCountsBins(det):
     if det=='hepd':
         return 50
     elif det=='hepp_l':
-        return 1000000
+        return int(1e6)
+    #elif det=='noaa':
+    #    return int(1e6)
     else:
         return -1
 
@@ -473,7 +474,7 @@ def getDays(tree):
 
 # read in daily averages, rms99, and rms99_of_99
 # return list of dict
-def readAverageFile(fileName,storedEn):
+def readAverageFile(fileName,storedEn,method='rms99'):
 
     av_Lalpha = [ {} for en in storedEn]
     file = open(fileName, "r")
@@ -483,8 +484,14 @@ def readAverageFile(fileName,storedEn):
         col_energy = columns[0]
         energyStored = col_energy
         en_index = storedEn.index( energyStored )
-        # fill dictionary from (L, alpha) -> (mean, rms99, rms99Err, rms99_of_99, rmsErr_99_of_99, weight)
-        av_Lalpha[en_index].update( {( columns[1],int(columns[2]) ):( columns[4],columns[10],columns[11],columns[12],columns[13],columns[14] )} )
+
+        if method=='gauss':
+            # energy L pitch entries mean meanErr rms rmsErr mean_counts meanErr_counts mpv sigma chi2 avGeomIndex
+            # fill dictionary from (L, alpha) -> (mean, rms, mpv, mpvErr, sigma, sigaErr) 
+            av_Lalpha[en_index].update( {( columns[1],int(columns[2]) ):( columns[4],columns[6],columns[10],columns[11],columns[12],columns[13],columns[14] )} )
+        else:
+            # fill dictionary from (L, alpha) -> (mean, rms, rms99, rms99Err, rms99_of_99, rmsErr_99_of_99, weight)
+            av_Lalpha[en_index].update( {( columns[1],int(columns[2]) ):( columns[4],columns[6],columns[10],columns[11],columns[12],columns[13],columns[14] )} )
     return av_Lalpha
 
 # helper to merge not only root tree, but the 2D histograms in a file as well
@@ -588,6 +595,14 @@ def merge(name, listOfFiles, runs, allHists):
         hist2D_loc_field.Write()
     outRoot.Close()
     return True
+
+
+# earth radius at equator in km
+RE = 6378.137
+
+# calculate L in dipole approximation
+def calculateL(geomLat, r):
+    return r / pow(np.cos( np.radians(geomLat) ),2) 
 
 # return magnetic field strenght at geomagnetic equator
 # ref McIlwain1966 'Magnetic coordinates'
@@ -710,7 +725,7 @@ def SubmitListToCondor(args, irun=1):
     fsub.write('output                = %s/out/job.%s.$(ClusterId).$(ProcId).out\n'%(logdir,str(irun)))
     fsub.write('log                   = %s/log/job.%s.$(ClusterId).log\n'%(logdir,str(irun)))
     fsub.write('error                 = %s/err/job.%s.$(ClusterId).$(ProcId).err\n'%(logdir,str(irun)))
-    fsub.write('RequestCpus = 8\n')
+    #fsub.write('RequestCpus = 8\n')
     #fsub.write('Request_Memory = 32 Mb')
     fsub.write('+JobFlavour = "longlunch"\n')
     fsub.write("queue executable,seed from %s" % os.path.join(logdir, "arguments.txt"))    

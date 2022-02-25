@@ -90,8 +90,6 @@ energy_bins, energyTab, energyMax = getEnergyBins(args.data, rebin)
 l_bins, l_x_bins = getLbins()
 # pitch bins
 p_bins, p_x_bins = getPitchBins()
-# earth radius at equator in km
-RE = 6378.137 
 
 if args.data=='hepp_l' or args.data=='hepp_h':
     hepp = True
@@ -324,6 +322,7 @@ for iev,ev in enumerate(dset2):
                 # fill also 0s, decided 2020/10/26
                 # correct flux by new geometrical factors
                 flux = flux*getGeomCorr(hepd, ie_new)
+                fluxEnergyNorm = float(flux/getEnergyBinWidth(args.data, ie_new))
                 fluxSquared = flux*flux
                 fluxSquaredEnergyNorm = pow(float(flux/getEnergyBinWidth(args.data, ie_new)),2)
 
@@ -368,11 +367,11 @@ for iev,ev in enumerate(dset2):
                 # fill Energy-local pitch matrix
                 # store corresponding L/alpha values
                 if (ie_new,ip_new) in vecSum:
-                    vecSum[(ie_new,ip_new)] += fluxSquaredEnergyNorm
+                    vecSum[(ie_new,ip_new)] += flux
                     vecAlphaL[(ie_new,ip_new)] = [vecAlphaL[(ie_new,ip_new)][0]+alpha_eq, round(vecAlphaL[(ie_new,ip_new)][1]+Lshell,1), vecAlphaL[(ie_new,ip_new)][2]+1.]
                     vecPitch[(ie_new,ip_new)] += Pvalue
                 else:
-                    vecSum[(ie_new,ip_new)] = fluxSquaredEnergyNorm
+                    vecSum[(ie_new,ip_new)] = flux
                     vecAlphaL[(ie_new,ip_new)] = [alpha_eq, round(Lshell,1), 1.]
                     vecPitch[(ie_new,ip_new)] = Pvalue
                     vecChannel[(ie_new,ip_new)] = channel
@@ -386,6 +385,7 @@ for iev,ev in enumerate(dset2):
                     print("--- Orig. pitch bin: ", ip)
                     print("--- Pitch_eq:        ", alpha_eq)
                     print("--- Flux:            ", flux)
+                    print("--- Flux/EnergyBin:  ", fluxEnergyNorm)
                     print("--- Flux2:           ", fluxSquared)
                     print("--- Flux2/EnergyBin: ", fluxSquaredEnergyNorm)
                     print("--- Day time [h]:    ", time_calc/60/60 )
@@ -417,13 +417,13 @@ for iev,ev in enumerate(dset2):
             print('Alpha: ',vecAlphaL[cell][0]/vecAlphaL[cell][2])
             print('L:     ',vecAlphaL[cell][1]/vecAlphaL[cell][2])
 
-        vecCells[Lbin,Albin].push_back(np.sqrt(value) / countIntSec)
+        vecCells[Lbin,Albin].push_back(value / vecAlphaL[cell][2]) #countIntSec)
         vecCellsEn[Lbin,Albin].push_back( energiesRounded[cell[0]] )
                     
         # fill histograms
-        hist2D_l_pitch.Fill(l_x_bins[Lbin], p_x_bins[Albin], float(np.sqrt(value))/float(countIntSec))
+        hist2D_l_pitch.Fill(l_x_bins[Lbin], p_x_bins[Albin], float(value)/vecAlphaL[cell][2]) #float(countIntSec))
         hist2D_l_pitch_en.Fill(l_x_bins[Lbin], p_x_bins[Albin])
-        hist2D_loc_flux.Fill(lonInt, latInt, float(np.sqrt(value))/float(countIntSec))
+        hist2D_loc_flux.Fill(lonInt, latInt, value/vecAlphaL[cell][2]) #float(countIntSec))
         # fill 2D histograms / event
         # time of half-orbit
         bint = hist2D_loc_field.GetBin(hist2D_loc_field.GetXaxis().FindBin(lonInt),hist2D_loc_field.GetYaxis().FindBin(latInt),0)
@@ -446,7 +446,7 @@ for iev,ev in enumerate(dset2):
 
     # fill the vector 'flux' and the corresponding 'energy'/'pitch'/'alpha' vectors
     for (key, value) in vecSum.items():
-        F_vecvec.push_back(np.sqrt(value) / float(countIntSec))
+        F_vecvec.push_back(value / vecAlphaL[key][2]) #float(countIntSec))
         E_vec.push_back(energiesRounded[key[0]])
         P_vec.push_back(int(vecPitch[key] / float(vecAlphaL[key][2]))) # normalise if 2 pitch angles ended up in same alpha cell /s
         A_vec.push_back(vecAlphaL[key][0]/vecAlphaL[key][2]) # normalise if 2 pitch angles ended up in same alpha cell /s

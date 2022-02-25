@@ -11,10 +11,11 @@ r.gStyle.SetOptStat(0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.', required=True)
-parser.add_argument('--data', type=str, choices=['hepd','hepp_l_channel_narrow','hepp_l_channel_wide','hepp_h','noaa'], help='Define input data.', required=True)
+parser.add_argument('--data', type=str, choices=['hepd','hepp_l_channel_narrow','hepp_l_channel_wide','hepp_l_channel_all','hepp_h','noaa'], help='Define input data.', required=True)
 parser.add_argument('--thr', type=int, default=100, help='Define minimum statistics used.')
-parser.add_argument('--sigma', type=int, default=1, help='Define minimum sigma for flux values > <phi>+sigma*phi_rms.')
+parser.add_argument('--numSigma', type=int, default=1, help='Define minimum sigma for flux values > <phi>+sigma*phi_rms.')
 parser.add_argument('--fitted', action='store_true', help='Use exponential fit tau value for threshold.')
+parser.add_argument('--sigma', type=str, default='rms99', choices=['rms99', 'rms','gauss'], help='Set minimum flux by RMS99, RMS or Gaussian fit.')
 parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1','v3'], help='Set the version.')
 parser.add_argument('--day', type=int, help='Define the day of the fluxes that are suppose to be stored.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
@@ -36,6 +37,7 @@ rebin=False
 if args.data=='hepp_l' or args.data=='hepp_h' or args.data=='hepp_l_channel_narrow' or args.data=='hepp_l_channel_wide':
     rebin=True
 det=args.data
+method=args.sigma
 maxFluxForHist=0.1
 if 'hepp_l' in args.data:
     det='hepp_l'
@@ -63,21 +65,32 @@ for ev in inRoot.tree:
 test_energies = sorted(test_energies, key=float)
 if energies!=test_energies:
     energies=test_energies
+    en_bins=len(test_energies)
 print("Energy bins: ", energies)
 storedEn = [round(en,1) for en in energies]
 print(storedEn)
 
 # output tree
-fileSnip = 'all'
-replacement = 'all_highFluxes'
+fileSnip = 'all_'+det
+replacement = 'all_highFluxes_'+det
 if det=='noaa':
     fileSnip = 'poes_n19'
     replacement = 'all_highFluxes_noaa'
-outfilename = filename.replace(fileSnip,replacement)
-
+outfilename = os.path.basename(filename.replace(fileSnip,replacement))
+outpath = os.path.dirname(filename)+'/'
+if method=='rms99':
+    outpath = outpath+"rms99/"
+elif method=='rms':
+    outpath = outpath+"mean_plus_"+str(args.numSigma)+"_rms/"
+elif method=='gauss':
+    outpath = outpath+"mpv_plus_"+str(args.numSigma)+"_sigma/"
+if not os.path.exists( outpath ):
+    os.makedirs( outpath )
 if args.fitted:
-    outfilename = filename.replace(fileSnip,'all_highFluxes_fittedExp')
-outRoot = r.TFile( outfilename, 'recreate' )
+    outfilename = os.path.basename(filename.replace(fileSnip,'all_highFluxes_fittedExp'))
+
+print('Output file stored at: ', outpath+outfilename)
+outRoot = r.TFile( outpath+outfilename, 'recreate' )
 out_tree = r.TTree( 'events', 'tree of fluxes' )
 
 Ev = array('i', [0])
@@ -90,15 +103,21 @@ Longitude = array('i', [0])
 Latitude = array('i', [0])
 Longitude_geom = array('i', [0])
 Latitude_geom = array('i', [0])
+Altitude = array('f', [0.])
 Lshell = array('f', [0.])
 Lshell_unbinned = array('f', [0.])
 Alpha_eq = array('f', [0.])
 Pitch = array('f', [0.])
 Energy = array('f', [0.])
+MEAN = array('f', [0.])
+RMS = array('f', [0.])
 RMS99 = array('f', [0.])
 RMS99of99 = array('f', [0.])
 RMS99Err = array('f', [0.])
 Weight = array('f', [0.])
+MPV = array('f', [0.])
+SIGMA = array('f', [0.])
+CHI2 = array('f', [0.])
 GeomInd = array('i', [0])
 
 out_tree.Branch( 'event', Ev, 'event/I' )
@@ -111,15 +130,21 @@ out_tree.Branch( 'lon', Longitude, 'lon/I' )
 out_tree.Branch( 'lat', Latitude, 'lat/I' )
 out_tree.Branch( 'geom_lon', Longitude_geom, 'geom_lon/I' )
 out_tree.Branch( 'geom_lat', Latitude_geom, 'geom_lat/I' )
+out_tree.Branch( 'altitude', Altitude, 'altitude/F' )
 out_tree.Branch( 'L', Lshell, 'L/F' )
 out_tree.Branch( 'L_unbinned', Lshell_unbinned, 'L_unbinned/F' )
 out_tree.Branch( 'alpha', Alpha_eq, 'alpha/F' )
 out_tree.Branch( 'energy', Energy, 'energy/F' )
 out_tree.Branch( 'pitch', Pitch, 'pitch/F' )
+out_tree.Branch( 'mean', MEAN, 'mean/F' )
+out_tree.Branch( 'rms', RMS, 'rms/F' )
 out_tree.Branch( 'rms99', RMS99, 'rms99/F' )
 out_tree.Branch( 'rmsErr99', RMS99Err, 'rmsErr99/F' )
 out_tree.Branch( 'rms99_of_99', RMS99of99, 'rms99_of_99/F' )
 out_tree.Branch( 'weight', Weight, 'weight/F' )
+out_tree.Branch( 'mpv', MPV, 'mpv/F' )
+out_tree.Branch( 'sigma', SIGMA, 'sigma/F' )
+out_tree.Branch( 'chi2', CHI2, 'chi2/F' )
 out_tree.Branch( 'geomIndex', GeomInd, 'geomIndex/I' )
 
 # get a list of all days, for which data was taken
@@ -147,12 +172,12 @@ for day in days:
     path = sharedOutPath()+'/data/averages/'+args.useVersion+'/'+args.data+'/'
     if args.integral:
         path += str(args.integral)+'s/'
-    if args.fitted:
-        path += 'fittedExp/'
-
+    if method=='gauss':
+        path += 'gauss/'
+    
     print("Average/RMS read from file: ", path+str(day)+'_min_'+str(args.thr)+'ev.txt')
 
-    av_Lalpha = readAverageFile(path+str(day)+'_min_'+str(args.thr)+'ev.txt', storedEn)
+    av_Lalpha = readAverageFile(path+str(day)+'_min_'+str(args.thr)+'ev.txt', storedEn, method)
 
     for ev in tree:
         L = ev.L
@@ -193,37 +218,54 @@ for day in days:
             if (L_binValue, alpha_binValue) in av_Lalpha[energy_bin]:
             
                 average = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][0]
-                rms99 = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][1]
-                rms99Err = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][2]
-                rms99of99 = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][3]
-                weight = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][5]
+                rms = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][1]
+                rms99,rms99Err,rms99of99,weight,chi2,mpv,gauss = -1,-1,-1,-1,-1,-1,-1
+                
+                if method!='gauss':
+                    weight = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][6]
+                    rms99 = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][2]
+                    rms99Err = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][3]
+                    rms99of99 = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][4]
+                else:
+                    gauss = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][4]
+                    mpv = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][2]
+                    chi2 = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][6]
 
                 # get daily average in L-alpha cell
                 # set RMS99 as threshold for 1% highest fluxes
-                xSigma = args.sigma*rms99
+                xSigma = args.numSigma*eval(method)
                 if rms99==0:
                     # use bin width as threshold 
-                    xSigma = args.sigma*(2.*rms99Err)
+                    xSigma = args.numSigma*(2.*rms99Err)
                 # set sigma like threshold
-                if args.fitted:
-                    xSigma = average + args.sigma*rms99 
-                ## get array of fluxes in the L-alpha bin
-                #flux = getattr(tree,"flux_"+str(l_fine_bins[L_bin])+"_"+str(Pbins[alpha_bin]))
-                #matchingEnergy = list(getattr(tree,"energy_"+str(l_fine_bins[L_bin])+"_"+str(Pbins[alpha_bin])))
-                #matchingEnergy =  [round(x,2) for x in matchingEnergy]
-                ## get proper binned flux
-                #matchedBin = matchingEnergy.index( round(energyStored,2) )
+                if method=='gauss':
+                    xSigma = mpv + args.numSigma*gauss
+                elif method=='rms':
+                    xSigma = average + args.numSigma*rms
+
+
                 flux=ev.flux[ia]
                 counts=ev.flux[ia]/invGeomFactor
                 # if counts is above threshold
-                if counts>xSigma:
+                # the RMS99 is based on counts. The normal mean+x*rms is based on fluxes.
+                if (method=='rms99' and counts>xSigma) or (method!='rms99' and flux>xSigma):
                     if args.debug:
                         print("L-alpha :        ", ev.L, alpha)
                         print("L-alpha bins :   ", L_bin, alpha_bin)
                         print("average flux     ", average)
-                        print("rms99 in counts: ", rms99)
-                        print('X sigma:         ', xSigma)
-                        print('Found counts:    ', counts)
+                        print("rms:             ", rms)
+                        if method=='rms99':
+                            print("rms99:           ", rms99)
+                        elif method=='gauss':
+                            print("mpv:             ", mpv)
+                            print("sigma:           ", gauss)
+                            print("chi2:            ", chi2)
+                            
+                        print('X sigma:              ', xSigma)
+                        if not method=='rms99':
+                            print('Found flux/counts:    ', flux) 
+                        else:
+                            print('Found flux/counts:    ', counts)
                     
                     hist2D[energy_bin].Fill(L, alpha, flux)
                     hist2D_en[energy_bin].Fill(L, alpha)
@@ -254,7 +296,7 @@ for day in days:
                     Latitude[0] = ev.Lat
                     Longitude_geom[0] = ev.geomLong
                     Latitude_geom[0] = ev.geomLat
-                    
+                    Altitude[0] = ev.altitude
                     # write in L bins
                     # use fine L bins
                     Lshell[0] = L_binValue
@@ -265,11 +307,15 @@ for day in days:
                     Energy[0] = energy[ia]
                     GeomInd[0] = geoIndex
                     Pitch[0] = ev.pitch[ia]
+                    MEAN[0] = average
+                    RMS[0] = rms
                     RMS99[0] = rms99
                     RMS99Err[0] = rms99Err
                     RMS99of99[0] = rms99of99
                     Weight[0] = weight
-
+                    MPV[0] = mpv
+                    SIGMA[0] = gauss
+                    CHI2[0] = chi2
                     out_tree.Fill()
 
                     if Signal[0]>maxCounts:
@@ -299,14 +345,14 @@ for day in days:
 inRoot.Close()
 outRoot.Write()
 outRoot.Close()
-os.system('chmod -R g+rwx %s'%(outfilename))
+os.system('chmod -R g+rwx %s'%(outpath+outfilename))
 
 if args.tryFit:
     # add second analysis part:
     # 1. fit expenential to 'counts' per day
     # 2. use the tau value as measure of the width
     # 3. add 'significance' as counts/tau to tree in order to allow for selection
-    f = r.TFile( outfilename, 'update' )
+    f = r.TFile( path+outfilename, 'update' )
     t3 = f.Get( 'events')
     print("Run in total over all: ",t3.GetEntries())
     print("with maximum counts of ",maxCounts)

@@ -21,6 +21,7 @@ def main():
     parameters = args.ONLYIN
     twoseed = args.DOUBLESEED
     det = args.DET
+    integral = args.INTEGRAL
 
     if cut_name!='99perc' and cut_name!='weights' and cut_name!='dummy_cut':
         cut_file = pkl.load(open(args.CUTfile,'rb'))
@@ -35,6 +36,8 @@ def main():
 
     n_energy_bins, energy_bins, en_max = getEnergyBins(det, True)
     time_bin = getTimeBins(det)
+    if integral:
+        time_bin = integral
     _,alpha_bins = getPitchBins()
     _,L_bins = getLbins()
     time, energy = [], []
@@ -337,6 +340,7 @@ if __name__ == '__main__':
     parser.add_argument('--ONLYIN', nargs='+', choices=['L','Pitch','Energy'], help='cluster in specific parameters.')
     parser.add_argument('--DOUBLESEED', action='store_true', help='Require two subsequent seeds.')
     parser.add_argument('--DET', type=str, choices=['hepp_l','noaa'], help='Require two subsequent seeds.')
+    parser.add_argument('--INTEGRAL', type=int, help='Fluxes integrated in seconds.')
 
 
     args = parser.parse_args()

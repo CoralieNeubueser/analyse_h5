@@ -11,7 +11,7 @@ r.gStyle.SetOptStat(0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.', required=True)
-parser.add_argument('--data', type=str, choices=['hepd','hepp_l_channel_narrow','hepp_l_channel_wide','hepp_l_channel_all','hepp_h','noaa'], help='Define input data.', required=True)
+parser.add_argument('--data', type=str, choices=['hepd','hepp_l_channel_narrow','hepp_l_channel_wide','hepp_l_channel_all','hepp_h','noaa_poes19_0degree','noaa_poes19_90degree'], help='Define input data.', required=True)
 parser.add_argument('--thr', type=int, default=100, help='Define minimum statistics used.')
 parser.add_argument('--numSigma', type=int, default=1, help='Define minimum sigma for flux values > <phi>+sigma*phi_rms.')
 parser.add_argument('--fitted', action='store_true', help='Use exponential fit tau value for threshold.')
@@ -42,6 +42,7 @@ maxFluxForHist=0.1
 if 'hepp_l' in args.data:
     det='hepp_l'
     maxFluxForHist=1000000
+#print(det)
 en_bins, energies, en_max = getEnergyBins(det, rebin)
 
 hist2D = []
@@ -73,9 +74,12 @@ print(storedEn)
 # output tree
 fileSnip = 'all_'+det
 replacement = 'all_highFluxes_'+det
-if det=='noaa':
-    fileSnip = 'poes_n19'
-    replacement = 'all_highFluxes_noaa'
+print(det)
+if 'noaa' in det:
+    sat = re.search(r'\d+', det).group()
+    print(sat)
+    fileSnip = 'poes_n{0}'.format(sat)
+    replacement = 'all_highFluxes_'+det
 outfilename = os.path.basename(filename.replace(fileSnip,replacement))
 outpath = os.path.dirname(filename)+'/'
 if method=='rms99':
@@ -99,6 +103,9 @@ Signal = array( 'f', [0.] )
 Channel = array( 'i', [0] )
 Day = array('i', [0])
 Time = array( 'f', [0.] )
+Fraction = array( 'f', [0.] )
+TotN = array( 'i', [0] )
+ActN = array( 'i', [0] )
 Longitude = array('i', [0])
 Latitude = array('i', [0])
 Longitude_geom = array('i', [0])
@@ -126,6 +133,9 @@ out_tree.Branch( 'counts', Signal, 'counts/F' )
 out_tree.Branch( 'channel', Channel, 'channel/I' )
 out_tree.Branch( 'day', Day, 'day/I' )
 out_tree.Branch( 'time', Time, 'time/F' )
+out_tree.Branch( 'fraction', Fraction, 'fraction/F' )
+out_tree.Branch( 'totN', TotN, 'totN/I' )
+out_tree.Branch( 'actN', ActN, 'actN/I' )
 out_tree.Branch( 'lon', Longitude, 'lon/I' )
 out_tree.Branch( 'lat', Latitude, 'lat/I' )
 out_tree.Branch( 'geom_lon', Longitude_geom, 'geom_lon/I' )
@@ -155,6 +165,10 @@ else:
 count = int(0)
 # determine max counts for histogram later
 maxCounts=0
+# calculate nominator for total measurements per day calculation
+nominator = getTimeBins(det)
+if args.integral:
+    nominator = args.integral/getTimeBins(det)
 
 # read Data file with geom Indices
 dataDict = readGeomIndex()
@@ -179,6 +193,24 @@ for day in days:
 
     av_Lalpha = readAverageFile(path+str(day)+'_min_'+str(args.thr)+'ev.txt', storedEn, method)
 
+
+    # calculate measure fraction available for anaylsis per day
+    countMeasurementsPerDay = 0
+    for ev in tree:
+        # select a day
+        if day!=ev.day:
+            continue
+        # reject SAA
+        if ev.field<getSAAcut(det):
+            continue
+        # L-range
+        if math.floor(ev.L)>=10. or ev.L<1:
+            continue
+        countMeasurementsPerDay+=1
+
+    potentialNumMeasurements = math.floor(24*60*60/nominator)
+    fractionMeasurements = countMeasurementsPerDay/potentialNumMeasurements
+
     for ev in tree:
         L = ev.L
         energy = ev.energy
@@ -192,6 +224,7 @@ for day in days:
         # L-range
         if math.floor(L)>=10. or L<1:
             continue
+            
         # run over max. 1000 events in debug mode
         if args.debug and ev.event>1000:
             print("Attention! In debug mode limited data set of 1000 events are used.")
@@ -239,7 +272,10 @@ for day in days:
                     xSigma = args.numSigma*(2.*rms99Err)
                 # set sigma like threshold
                 if method=='gauss':
-                    xSigma = mpv + args.numSigma*gauss
+                    if chi2!=-1:
+                        xSigma = mpv + args.numSigma*gauss
+                    else:
+                        xSigma = average + args.numSigma*rms
                 elif method=='rms':
                     xSigma = average + args.numSigma*rms
 
@@ -288,10 +324,13 @@ for day in days:
                         Signal[0] = flux/invGeomFactor
                     else:
                         Signal[0] = flux
-                    if det=='hepp_l_channel_wide' or det=='hepp_l_channel_narrow':
+                    if det=='hepp_l':
                         Channel[0] = ev.channel[ia]
                     Day[0] = day
                     Time[0] = storedTime # daily hours
+                    TotN[0] = potentialNumMeasurements
+                    ActN[0] = countMeasurementsPerDay
+                    Fraction[0] = fractionMeasurements
                     Longitude[0] = ev.Long
                     Latitude[0] = ev.Lat
                     Longitude_geom[0] = ev.geomLong

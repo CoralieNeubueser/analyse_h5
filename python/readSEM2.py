@@ -14,6 +14,8 @@ r.gStyle.SetPadRightMargin(0.2)
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
 parser.add_argument('--data', type=str, choices=['noaa'], required=True, help='Define patht to data file.')
+parser.add_argument('--satellite', type=int, choices=[19], default=19, required=True, help='Define satellite.')
+parser.add_argument('--telescope', type=int, choices=[0,90], default=0, required=True, help='Define telescope.')
 parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1'], help='Define wether v1/ (no flux=0) or v2/ (all fluxes), or v2.1/ (all fluxes, summed over energy) is written.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
@@ -55,9 +57,10 @@ print("input files has ",entries, " entries")
 
 # prepare root output
 rootName = os.path.split(Rfilename)[1]
-outRootDir = sharedOutPath()+"/data/root/"+args.useVersion+"/"+args.data+"/"
+det = '{0}_poes{1}_{2}degree'.format(args.data,args.satellite,args.telescope)
+outRootDir = sharedOutPath()+"/data/root/"+args.useVersion+"/"+det+"/"
 if integral!=-1:
-    outRootDir = sharedOutPath()+"/data/root/"+args.useVersion+"/"+args.data+"/"+str(args.integral)+"s/"
+    outRootDir = sharedOutPath()+"/data/root/"+args.useVersion+"/"+det+"/"+str(args.integral)+"s/"
 outRootName = outRootDir+rootName
 
 month = rootName[9:15]
@@ -136,7 +139,8 @@ print("L-alpha map has {} cells.".format(len(vecCells)))
 
 # write 2d histograms
 hist2D_l_pitch=r.TH2D("hist2D_l_pitch","hist2D_l_pitch",l_bins,np.array(l_x_bins),9,0,180)
-hist2D_l_pitch_en=r.TH2D("hist2D_l_pitch_en","hist2D_l_pitch_en",l_bins,np.array(l_x_bins),9,0,180)
+hist2D_l_pitch_en_zero=r.TH2D("hist2D_l_pitch_en_zero","hist2D_l_pitch_en_zero",l_bins,np.array(l_x_bins),9,0,180)
+hist2D_l_pitch_en_zero_noSAA=r.TH2D("hist2D_l_pitch_en_zero_noSAA","hist2D_l_pitch_en_zero_noSAA",l_bins,np.array(l_x_bins),9,0,180)
 hist2D_loc_L=r.TH2D("hist2D_loc_L","hist2D_loc_L",361,-180.5,180.5,181,-90.5,90.5)
 hist2D_loc_Lorig=r.TH2D("hist2D_loc_Lorig","hist2D_loc_Lorig",361,-180.5,180.5,181,-90.5,90.5)
 hist2D_loc=r.TH2D("hist2D_loc","hist2D_loc",361,-180.5,180.5,181,-90.5,90.5)
@@ -190,9 +194,9 @@ for iev,evt in enumerate(t):
         if Beq > abs(evt.btotsat):
             Beq = abs(evt.btotsat)
         # calculate equatorial pitch angle
-        alpha_eq = getAlpha_eq( evt.alpha0sat, abs(evt.btotsat), Beq )
+        alpha_eq = getAlpha_eq( eval('evt.alpha{0}sat'.format(args.telescope)), abs(evt.btotsat), Beq )
 
-        Pvalue = evt.alpha0sat
+        Pvalue = eval('evt.alpha{0}sat'.format(args.telescope))
         # find corresponding L/alpha bin, and use the average Lshell and alpha values 
         # only if L shell values < 10                                                                                                                                                                                       
         if Lshell < 10 and Lshell >= 1:
@@ -209,7 +213,7 @@ for iev,evt in enumerate(t):
     
 
             for ien,en in enumerate(energyTab):
-                flux = eval('evt.mep_ele_tel0_flux_e'+str(ien+1))
+                flux = eval('evt.mep_ele_tel{0}_flux_e{1}'.format(args.telescope,(ien+1)))
                 fluxSquared = flux*flux
 
                 if (ien,Albin) in vecSum:
@@ -255,8 +259,13 @@ for iev,evt in enumerate(t):
         
         # fill histograms                 
         hist2D_l_pitch.Fill(l_x_bins[Lbin], p_x_bins[Albin], value / vecAlphaL[cell][2]) #float(countIntSec))
-        hist2D_l_pitch_en.Fill(l_x_bins[Lbin], p_x_bins[Albin])
         hist2D_loc_flux.Fill(longitude, int(evt.lat),  value / vecAlphaL[cell][2]) #/ float(countIntSec))
+        
+        if cell[0]==0:
+            hist2D_l_pitch_en_zero.Fill(l_x_bins[Lbin], p_x_bins[Albin])
+        if cell[0]==0 and evt.btotsat>22000:
+            hist2D_l_pitch_en_zero_noSAA.Fill(l_x_bins[Lbin], p_x_bins[Albin])
+
         # fill 2D histograms / event                                                             
         # time of half-orbit
         bint = hist2D_loc_field.GetBin(hist2D_loc_field.GetXaxis().FindBin(longitude),hist2D_loc_field.GetYaxis().FindBin(int(evt.lat)),0)
@@ -347,6 +356,15 @@ for iev,evt in enumerate(t):
     countIntSec = 0
     countInt = 0
     countFlux = 0
+
+prep2D(hist2D_l_pitch_en_zero, 'L value', '#alpha_eq [deg]', '#fluxes', False)
+prep2D(hist2D_l_pitch_en_zero_noSAA, 'L value', '#alpha_eq [deg]', '#fluxes no SAA', False)
+prep2D(hist2D_l_pitch, 'L value', '#alpha_eq [deg]', '#sum#Phi', False)
+prep2D(hist2D_loc_L,  'Longitude', 'Latitude', 'L', False)
+prep2D(hist2D_loc_Lorig,  'Longitude', 'Latitude', 'L_{orig}', False)
+prep2D(hist2D_loc,  'Longitude', 'Latitude', '#entries', False)
+prep2D(hist2D_loc_flux,  'Longitude', 'Latitude', '#sum#Phi', False)
+prep2D(hist2D_loc_field, 'Longitude', 'Latitude', 'B [nT]', False)
 
 outRoot.Write()
 outRoot.Close() 

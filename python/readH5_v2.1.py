@@ -96,6 +96,8 @@ RE = 6378.137
 if args.data=='hepp_l' or args.data=='hepp_h':
     hepp = True
     head, tail = os.path.split(filename)
+    numbers = re.findall('\d+', tail)
+    orbit_index = int(numbers[4])
     # CSES_01_HEP_1_L02_A4_069070_20190502_144452_20190502_152151_000
     times = re.findall('\d+', tail)
     time_blanc = int(str(times[5]+times[6]))  #int(str(times[1]+times[2])) #str(dset_time[0])
@@ -151,9 +153,11 @@ B = array( 'f', [ 0. ] )
 B_eq = array( 'f', [ 0. ] )
 Alt = array( 'f', [ 0. ] )
 Ev = array( 'i', [ 0 ] )
+Orbit = array( 'i', [ 0 ] )
 Ch_vec = r.std.vector(int)()
 
 tree.Branch( 'event', Ev, 'event/I' )
+tree.Branch( 'orbit', Orbit, 'orbit/I' )
 tree.Branch( 'channel', Ch_vec)
 tree.Branch( 'L', L, 'L/F' )
 tree.Branch( 'pitch', P_vec)
@@ -267,6 +271,11 @@ for iev,ev in enumerate(dset2):
             time_act = (time_calc-time_min)/60.
             daytime = time_calc/60./60.
             day = int(str(time_blanc)[-14:-6])
+            # make sure that if orbit data crosses days, the day time correct 
+            if daytime>24:
+                # next day
+                daytime = daytime-24
+                day+=1
             year = int(str(time_blanc)[-14:-10])
 
             lonInt = int(dset_lon[iev][0]) #[0])
@@ -503,6 +512,7 @@ for iev,ev in enumerate(dset2):
     # fill tree with measures / 1s*integral
     # effectively filles the values for the last integral time point
     Ev[0] = countEv
+    Orbit[0] = orbit_index
     L[0] = Lshell
     T[0] = daytime # in hours
     Tday[0] = day 

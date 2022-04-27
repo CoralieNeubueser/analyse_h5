@@ -7,7 +7,11 @@ parser.add_argument('--hepd', action='store_true', help='Analyse HEPD data.')
 parser.add_argument('--hepp_l', action='store_true', help='Analyse HEPP-L data.')
 parser.add_argument('--hepp_h', action='store_true', help='Analyse HEPP-H data.')
 parser.add_argument('--noaa', action='store_true', help='Analyse NOAA data.')
+### DETAILS OF INSTRUMENTS
 parser.add_argument('--channel', type=str, required= '--hepp_l' in sys.argv,  choices=['narrow','wide','all'], help='Choose narrow, wide, or all channels to be read.')
+parser.add_argument('--satellite', type=int, choices=[19], default=19, help='Define satellite.')
+parser.add_argument('--telescope', type=int, choices=[0,90], default=0, help='Define telescope.')
+
 ### ACTIONS
 ### defaults action reads h5 and writes out root files
 parser.add_argument('--numRuns', type=int, help='Define number of runs to be analysed.', required=True)
@@ -101,12 +105,12 @@ elif args.hepp_h:
             datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*{0}*.h5'.format(d))
 elif args.noaa:
     data = 'noaa'
-    det = 'noaa'
-    datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data/poes_n19_{0}*_proc.nc.root'.format(args.month))
+    det = 'noaa_poes{0}_{1}degree'.format(args.satellite, args.telescope)
+    datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data/poes_n{1}_{0}*_proc.nc.root'.format(args.month,args.satellite))
     #datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data_spec/poes_n19_{0}*_proc.nc.root'.format(args.month))
     if args.day:
         for d in args.day:
-            datapaths += glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data/poes_n19_{0}_proc.nc.root'.format(d))
+            datapaths += glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data/poes_n{1}_{0}_proc.nc.root'.format(d,args.satellite))
 
 # sort files by time
 datapaths.sort(key=os.path.getmtime)
@@ -168,10 +172,10 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
                 cmd='python3 python/readH5_v2.1.py --inputFile '+str(run)
             elif version == 'v3':
                 cmd='python3 python/readH5_v3.py --inputFile '+str(run)
-            if det=='noaa':
-                cmd='python3 python/readSEM2.py --data noaa --inputFile '+str(run)
+            if data=='noaa':
+                cmd='python3 python/readSEM2.py --data noaa --satellite {0} --telescope {1} --inputFile {2}'.format(args.satellite, args.telescope, run)
                 if version == 'v3.1':
-                    cmd='python3 python/readSEM2_v3.py --data noaa --inputFile '+str(run)
+                    cmd='python3 python/readSEM2_v3.py --data noaa --satellite {0} --telescope {1} --inputFile {2}'.format(args.satellite, args.telescope, run)
             if args.integral:
                 cmd+=' --integral '+str(args.integral)
             if not args.quiet:
@@ -247,7 +251,7 @@ elif args.merge and not args.test:
                 findOlds.append( glob.glob('{0}data/root/{1}/hepd/all_hepd_{2}*.root'.format(sharedOutPath(),version,d)) )
                 runs.append( len(runList[iD]) )
         elif args.month:
-            for d in range(1,31):
+            for d in range(1,32):
                 strD = str(d)
                 if d<10:
                     strD = '0'+str(d)
@@ -281,7 +285,7 @@ elif args.merge and not args.test:
                 runs.append( len(runList[0]) )
                 days.append(d)
         elif args.month:
-            for d in range(1,31):
+            for d in range(1,32):
                 strD = str(d)
                 if d<10:
                     strD = '0'+str(d)
@@ -297,14 +301,14 @@ elif args.merge and not args.test:
             pathToFind = '{0}data/root/{1}/{2}/{3}s/'.format(sharedOutPath(),version,det,args.integral)
         if args.day:
             for d in args.day:
-                mges.append( '{0}poes_n19_{1}_proc.nc.root'.format(pathToFind,d) )
+                mges.append( '{0}poes_n{2}_{1}_proc.nc.root'.format(pathToFind,d,args.satellite) )
                 days.append(d)
         elif args.month:
-            for d in range(1,31):
+            for d in range(1,32):
                 strD = str(d)
                 if d<10:
                     strD = '0'+str(d)
-                mges.append( '{0}poes_n19_{1}_proc.nc.root'.format(pathToFind,str(args.month)+strD) )
+                mges.append( '{0}poes_n{2}_{1}_proc.nc.root'.format(pathToFind,str(args.month)+strD,args.satellite) )
                 days.append(str(args.month)+strD)
     oldruns=[]
     for fO,findOld in enumerate(findOlds):
@@ -353,7 +357,7 @@ elif args.merge and not args.test:
         if job=="":
             continue
         if args.submit:
-            exefilename = 'job_%s_%s_%s_%s.sh'%(version,det,os.path.basename(mges[ijob]),ijob)
+            exefilename = 'job_%s_%s_%s_%s_%s.sh'%(version,det,os.path.basename(mges[ijob]),args.sigma,ijob)
             if args.integral:
                 exefilename = exefilename.replace('_runs','_runs_int_'+str(args.integral)+'s')
                 exefilename = exefilename.replace('proc','int_'+str(args.integral)+'s')
@@ -396,8 +400,8 @@ elif args.select:
     findFile = []
     detPath = det
     fileSnip = 'all_{0}_'.format(det)
-    if det=='noaa':
-        fileSnip = 'poes_n19_'
+    if data=='noaa':
+        fileSnip = 'poes_n{0}_'.format(args.satellite)
     if args.test:
         detPath = 'L3_test/L3_repro'
         fileSnip = 'all_'

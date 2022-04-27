@@ -66,7 +66,7 @@ def getPitchBins():
 # get time bin width for all detectors
 # returns the time bin width in seconds
 def getTimeBins(det):
-    if det=='noaa':
+    if 'noaa' in det:
         return 2
     else:
         return 1
@@ -80,7 +80,7 @@ def getEnergyBins(det, rebinned):
     if det=='hepd':
         # original upper bin edges: [[ 4. 8.96811 10.9642  13.4045  16.388   20.0355  24.4949  29.9468  36.6122  44.7611  54.7237  66.9037 ]]
         return 12, [2.0, 6.5, 10.0, 12.2, 14.9, 18.2, 22.3, 27.2, 33.3, 40.7, 49.7, 60.8], 66.9
-    elif det=='noaa':
+    elif 'noaa' in det:
         return 4, [0.04, 0.13, 0.287, 0.612], 0.612
     elif det=='hepp_l' and rebinned:
         return 16, [0.1, 0.28125, 0.4625, 0.64375, 0.825, 1.00625, 1.1875, 1.36875, 1.55, 1.73125, 1.9125, 2.09375, 2.275, 2.45625, 2.6375, 2.81875], 3
@@ -416,7 +416,7 @@ def getGeomFactor(det,energyBin):
     # unknown geometrical factors.. for HEPP-H and NOAA-POES19
     elif det=='hepp_h':
         ele_corr_GF = 16*[1.] 
-    elif det=='noaa':
+    elif 'noaa' in det:
         # taken from https://www.ngdc.noaa.gov/stp/satellite/poes/docs/NGDC/MEPED%20telescope%20processing%20ATBD_V1.pdf
         # found 17.01.2022
         #ele_corr_GF = [100./1.24, 100./1.44, 100./0.75, 100./0.55]
@@ -807,7 +807,7 @@ def readEQfile(magMin=0):
 
 ## get SAA cut dependent on detector
 def getSAAcut(det):
-    if det=='noaa':
+    if 'noaa' in det:
         return 22000
     else:
         return 25000

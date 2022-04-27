@@ -63,6 +63,14 @@ def getPitchBins():
     p_bins=len(p_x_bins)
     return p_bins, p_x_bins
 
+# get time bin width for all detectors
+# returns the time bin width in seconds
+def getTimeBins(det):
+    if 'noaa' in det:
+        return 2
+    else:
+        return 1
+
 # define energy bins
 # returns 
 # 1. the number of energy bins for either hepd of hepp data
@@ -72,6 +80,8 @@ def getEnergyBins(det, rebinned):
     if det=='hepd':
         # original upper bin edges: [[ 4. 8.96811 10.9642  13.4045  16.388   20.0355  24.4949  29.9468  36.6122  44.7611  54.7237  66.9037 ]]
         return 12, [2.0, 6.5, 10.0, 12.2, 14.9, 18.2, 22.3, 27.2, 33.3, 40.7, 49.7, 60.8], 66.9
+    elif 'noaa' in det:
+        return 4, [0.04, 0.13, 0.287, 0.612], 0.612
     elif det=='hepp_l' and rebinned:
         return 16, [0.1, 0.28125, 0.4625, 0.64375, 0.825, 1.00625, 1.1875, 1.36875, 1.55, 1.73125, 1.9125, 2.09375, 2.275, 2.45625, 2.6375, 2.81875], 3
     elif det=='hepp_l' and not rebinned:
@@ -400,24 +410,27 @@ def getGeomFactor(det,energyBin):
         ele_corr_GF = 16*[0.12] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
     elif det=='hepp_l_channel_wide':
         ele_corr_GF = 16*[0.73] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+    # the geometrical factor is mixed between the channels.. use the smallest.
+    elif det=='hepp_l_channel_all':
+        ele_corr_GF = 16*[0.12]
+    # unknown geometrical factors.. for HEPP-H and NOAA-POES19
     elif det=='hepp_h':
-        ele_corr_GF = 16*[0.] 
-
+        ele_corr_GF = 16*[1.] 
+    elif 'noaa' in det:
+        # taken from https://www.ngdc.noaa.gov/stp/satellite/poes/docs/NGDC/MEPED%20telescope%20processing%20ATBD_V1.pdf
+        # found 17.01.2022
+        #ele_corr_GF = [100./1.24, 100./1.44, 100./0.75, 100./0.55]
+        ele_corr_GF = [1.24, 1.44, 0.75, 0.55]
     return ele_corr_GF[energyBin]
 
 def getInverseGeomFactor(det,energyBin):
+    ele_corr_GF = getGeomFactor(det,energyBin)
     if det=='hepd':
         # reverse correction, and use original factor
         ele_GF = [ 0.76, 188.26, 326.64, 339.65, 344.99, 331.83, 304.73, 263.56, 217.33, 169.48, 117.31, 71.45 ]
         return getGeomCorr(det,energyBin) / ele_GF[energyBin]
-    elif det=='hepp_l_channel_narrow':
-        ele_corr_GF = 16*[0.12]
-        return 1./ele_corr_GF[energyBin]
-    elif det=='hepp_l_channel_wide':
-        ele_corr_GF = 16*[0.73]
-        return 1./ele_corr_GF[energyBin]
     else:
-        return 0.
+        return 1./ele_corr_GF
 
 # returns the energy bin width, used to normalise fluxes to counts/s/cm2/sr/MeV 
 def getEnergyBinWidth(det, energyBin):
@@ -426,7 +439,7 @@ def getEnergyBinWidth(det, energyBin):
     if det=='hepp_l':
         #enBorder=np.array([0.1, 0.28125, 0.4625, 0.64375, 0.825, 1.00625, 1.1875, 1.36875, 1.55, 1.73125, 1.9125, 2.09375, 2.275, 2.45625, 2.6375, 2.81875, 3.0])
         #enBorder=np.array(16*[0.011])
-        return 0.11 
+        return 0.01 
     elif det=='hepp_h':
         return 0.21
     else:
@@ -445,9 +458,11 @@ def getCountsBins(det):
     if det=='hepd':
         return 50
     elif det=='hepp_l':
-        return 1000000
+        return int(1e6)
+    #elif det=='noaa':
+    #    return int(1e6)
     else:
-        return 1000
+        return -1
 
 # return a list of days
 def getDays(tree):
@@ -459,7 +474,7 @@ def getDays(tree):
 
 # read in daily averages, rms99, and rms99_of_99
 # return list of dict
-def readAverageFile(fileName,storedEn):
+def readAverageFile(fileName,storedEn,method='rms99'):
 
     av_Lalpha = [ {} for en in storedEn]
     file = open(fileName, "r")
@@ -469,8 +484,14 @@ def readAverageFile(fileName,storedEn):
         col_energy = columns[0]
         energyStored = col_energy
         en_index = storedEn.index( energyStored )
-        # fill dictionary from (L, alpha) -> (mean, rms99, rms99Err, rms99_of_99, rmsErr_99_of_99, weight)
-        av_Lalpha[en_index].update( {( columns[1],int(columns[2]) ):( columns[4],columns[10],columns[11],columns[12],columns[13],columns[14] )} )
+
+        if method=='gauss':
+            # energy L pitch entries mean meanErr rms rmsErr mean_counts meanErr_counts mpv sigma chi2 avGeomIndex
+            # fill dictionary from (L, alpha) -> (mean, rms, mpv, mpvErr, sigma, sigaErr) 
+            av_Lalpha[en_index].update( {( columns[1],int(columns[2]) ):( columns[4],columns[6],columns[10],columns[11],columns[12],columns[13],columns[14] )} )
+        else:
+            # fill dictionary from (L, alpha) -> (mean, rms, rms99, rms99Err, rms99_of_99, rmsErr_99_of_99, weight)
+            av_Lalpha[en_index].update( {( columns[1],int(columns[2]) ):( columns[4],columns[6],columns[10],columns[11],columns[12],columns[13],columns[14] )} )
     return av_Lalpha
 
 # helper to merge not only root tree, but the 2D histograms in a file as well
@@ -575,6 +596,14 @@ def merge(name, listOfFiles, runs, allHists):
     outRoot.Close()
     return True
 
+
+# earth radius at equator in km
+RE = 6378.137
+
+# calculate L in dipole approximation
+def calculateL(geomLat, r):
+    return r / pow(np.cos( np.radians(geomLat) ),2) 
+
 # return magnetic field strenght at geomagnetic equator
 # ref McIlwain1966 'Magnetic coordinates'
 def getBeq(iL):
@@ -597,6 +626,7 @@ def getAlpha_eq(iAlpha, iB, iBeq):
         return 999
 
     else:
+        #print(iBeq, iB)
         if iAlpha<=90:
             alpha_eq = np.arcsin( np.sin( iAlpha_rad ) * np.sqrt(iBeq/iB) )
         else:
@@ -639,9 +669,9 @@ def SubmitToCondor(cmd,run,irun):
     frunname = 'job_%s.sh'%(str(runname.replace('.h5','')))
     print(frunname)
 
-    os.system('chmod 777 %s/%s'%(logdir,frunname))
-
     frun = writeExecutionFile(logdir+'/'+frunname, cmd)
+
+    os.system('chmod 777 %s/%s'%(logdir,frunname))
 
     os.system("mkdir -p %s/out"%logdir)
     os.system("mkdir -p %s/log"%logdir)
@@ -662,12 +692,12 @@ def SubmitToCondor(cmd,run,irun):
     fsub.write('output                = %s/out/job.%s.$(ClusterId).$(ProcId).out\n'%(logdir,str(irun)))
     fsub.write('log                   = %s/log/job.%s.$(ClusterId).log\n'%(logdir,str(irun)))
     fsub.write('error                 = %s/err/job.%s.$(ClusterId).$(ProcId).err\n'%(logdir,str(irun)))
-    fsub.write('RequestCpus = 4\n')
-    fsub.write('+JobFlavour = "espresso"\n')
+    #fsub.write('RequestCpus = 4\n')
+    fsub.write('+JobFlavour = "longlunch"\n')
     fsub.write('queue 1\n')
     fsub.close()
     
-    cmdBatch="condor_submit -name sn-01.cr.cnaf.infn.it %s/%s \n"%(logdir,fsubname)
+    cmdBatch="condor_submit -name sn-02 %s/%s \n"%(logdir,fsubname)
     print(cmdBatch)
     p = subprocess.Popen(cmdBatch, shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 
@@ -695,13 +725,13 @@ def SubmitListToCondor(args, irun=1):
     fsub.write('output                = %s/out/job.%s.$(ClusterId).$(ProcId).out\n'%(logdir,str(irun)))
     fsub.write('log                   = %s/log/job.%s.$(ClusterId).log\n'%(logdir,str(irun)))
     fsub.write('error                 = %s/err/job.%s.$(ClusterId).$(ProcId).err\n'%(logdir,str(irun)))
-    fsub.write('RequestCpus = 4\n')
+    #fsub.write('RequestCpus = 8\n')
     #fsub.write('Request_Memory = 32 Mb')
     fsub.write('+JobFlavour = "longlunch"\n')
     fsub.write("queue executable,seed from %s" % os.path.join(logdir, "arguments.txt"))    
     fsub.close()
 
-    cmdBatch="condor_submit -name sn-01.cr.cnaf.infn.it %s/%s \n"%(logdir,fsubname)
+    cmdBatch="condor_submit -name sn-02 %s/%s \n"%(logdir,fsubname)
     print(cmdBatch)
     p = subprocess.Popen(cmdBatch, shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 
@@ -767,9 +797,17 @@ def getAlphaLindex(alpha_v, L_v):
     return ia,il
 
 ## read-in of list of days with EQs
-def readEQfile():
-    df = pd.read_csv('{}/data/earthquakes_2019_2021.csv'.format(sharedOutPath()), usecols=['time','latitude','longitude'], sep=';') # names=['time','latitude','longitude','depth','mag','magType','nst','gap','dmin','rms','net','id','updated','place','type','horizontalError','depthError','magError','magNst','status','locationSource','magSource']
-    months = np.unique([int(m[:7].replace('-','')) for m in df.time])
-    days = [int(day[:10].replace('-','')) for day in df.time]
-    daytimes = [int(t[11:13])+int(t[14:16])/60 for t in df.time]
+def readEQfile(magMin=0):
+    df = pd.read_csv('{}/data/earthquakes_2019_2021.csv'.format(sharedOutPath()), usecols=['time','latitude','longitude','mag'], sep=';')
+    df_sel = df[df.mag>magMin]
+    months = np.unique([int(m[:7].replace('-','')) for m in df_sel.time])
+    days = [int(day[:10].replace('-','')) for day in df_sel.time]
+    daytimes = [int(t[11:13])+int(t[14:16])/60 for t in df_sel.time]
     return months, days, daytimes 
+
+## get SAA cut dependent on detector
+def getSAAcut(det):
+    if 'noaa' in det:
+        return 22000
+    else:
+        return 25000

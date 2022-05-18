@@ -347,9 +347,9 @@ def main():
                 if (tree_sig.energy == energy_cluster):
                     cls_index =int(cluster_dict[int(cls_i)])
                     #print(cls_index)
-                    if int(cls_ev) in cluster_index:
-                        print('Flux already assigned.. move on.')
-                        continue
+                    #if int(cls_ev) in cluster_index:
+                    #    print('Flux already assigned.. move on.')
+                    #    continue
                     cluster_index[int(cls_ev)] = cls_index
                     if cls_index in cl_L:
                         cl_L[cls_index].append(tree_sig.L)

@@ -555,7 +555,7 @@ elif args.cluster:
 
         # submit to Condor 
         if args.submit:
-            exefilename = 'job_cluster_%s_%s_%s_%s.sh'%(os.path.basename(clusterInput),args.cut,str(args.window),str(args.seeds))
+            exefilename = 'job_cluster_%s_%s_%s_%s_%s_%s.sh'%(os.path.basename(clusterInput),args.cut,str(args.window),str(args.sigma),str(args.numSigma),str(args.seeds))
             exefile = writeExecutionFile(home()+'/log/'+exefilename, cmdTot)
             print("Write execution file to:", exefilename)
             args_file.write("%s\n"%(home()+'/log/'+exefilename))

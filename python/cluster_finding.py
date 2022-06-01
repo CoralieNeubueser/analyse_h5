@@ -54,7 +54,7 @@ def main():
              break
     energy_bins = test_energies
 
-    time, alpha, pitch, L, energy, event_idx, cut = [], [], [], [], [], [], []
+    time, alpha, pitch, L, energy, event_idx_unsorted, cut = [], [], [], [], [], [], []
 
     for i in np.arange(0,nentries):
         tree_sig.GetEntry(i)
@@ -92,7 +92,14 @@ def main():
         alpha.append(tree_sig.alpha)
         L.append(tree_sig.L)
         energy.append(tree_sig.energy)
-        event_idx.append(i)
+        event_idx_unsorted.append(i)
+
+    # another loop to sort in time
+    index_arr = np.array(time).argsort()
+    alpha = np.array(alpha)[index_arr]
+    energy = np.array(energy)[index_arr]
+    L = np.array(L)[index_arr]
+    event_idx = [i for i in range(len(index_arr))]
 
     print('Entries after '+str(cut_name), len(time))
 
@@ -118,7 +125,7 @@ def main():
                         i_seed = 0
 
                         while i_seed < len(time_temp)-1:
-                            if (time_temp[i_seed+1] - time_temp[i_seed]) < 2*time_bin:
+                            if abs(time_temp[i_seed+1] - time_temp[i_seed])/time_bin <= 1.1:
                                 time_seed.append(time_temp[i_seed])
                                 alpha_seed.append(alpha_temp[i_seed])
                                 L_seed.append(L_temp[i_seed])
@@ -146,7 +153,7 @@ def main():
                     i_seed = 0
 
                     while i_seed < len(time_temp)-1:
-                        if (time_temp[i_seed+1] - time_temp[i_seed]) < 2*time_bin:
+                        if abs(time_temp[i_seed+1] - time_temp[i_seed])/time_bin <= 1.1:
                             time_seed.append(time_temp[i_seed])
                             alpha_seed.append(alpha_temp[i_seed])
                             L_seed.append(L_temp[i_seed])
@@ -172,7 +179,7 @@ def main():
                 i_seed = 0
 
                 while i_seed < len(time_temp)-1:
-                    if (time_temp[i_seed+1] - time_temp[i_seed]) < 2*time_bin:
+                    if abs(time_temp[i_seed+1] - time_temp[i_seed])/time_bin <= 1.1:
                         time_seed.append(time_temp[i_seed])
                         alpha_seed.append(alpha_temp[i_seed])
                         L_seed.append(L_temp[i_seed])
@@ -192,7 +199,7 @@ def main():
             i_seed = 0
 
             while i_seed < len(time_temp)-1:
-                if (time_temp[i_seed+1] - time_temp[i_seed]) < 2*time_bin:
+                if abs(time_temp[i_seed+1] - time_temp[i_seed])/time_bin <= 1.1:
                     time_seed.append(time_temp[i_seed])
                     alpha_seed.append(alpha[i_seed])
                     L_seed.append(L[i_seed])
@@ -290,6 +297,10 @@ def main():
         energy_cluster = cluster_entries[0,3]/10000
         if len(all_cluster_ev)<2 and twoseed:
             print("ATTENTION NO DOUBLE SEEDS STORED!")
+        
+        #time_stop = 0
+        #while(time_stop<window_size):
+        #    for cls_ev in np.arange(int(np.min(all_cluster_ev),)
 
         for cls_ev in np.arange(int(np.min(all_cluster_ev)), int(np.max(all_cluster_ev))+1): #np.arange(int(all_cluster_ev[0]), int(all_cluster_ev[-1])+1): #int(np.min(all_cluster_ev)), int(np.max(all_cluster_ev))):
             tree_sig.GetEntry(int(cls_ev))
@@ -384,7 +395,7 @@ def main():
                     cl_a[cls_index]=[tree_sig.alpha]
 
     ### determine specular PBs                                                                                                                                                                                                                                                
-    cl_list = list(good_cluster_list)
+    cl_list = list(cl_t.keys()) #list(good_cluster_list)
     num_specular = 0
     cl_specular = {-1:-1}
     cl_hemi = {-1:0}
@@ -418,7 +429,10 @@ def main():
         for cl_next in cl_list[icl+1:]:
             cl_next = int(cl_next)
             cl_specular[cl_next] = -1
-
+            if not cl_next in cl_t:
+                print("Not found index: ", cl_next)
+                print(cl_list)
+                print(cl_t.keys())
             time_d = cl_t[cl_next][-1] - cl_t[cl_next][0]
             time_next = cl_t[cl_next][0] + time_d/2
             Lshell_next = np.mean(np.array(cl_L[cl_next]))

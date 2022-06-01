@@ -16,7 +16,7 @@ parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
 parser.add_argument('--data', type=str, choices=['noaa'], required=True, help='Define patht to data file.')
 parser.add_argument('--satellite', type=int, choices=[19], default=19, required=True, help='Define satellite.')
 parser.add_argument('--telescope', type=int, choices=[0,90], default=0, required=True, help='Define telescope.')
-parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1'], help='Define wether v1/ (no flux=0) or v2/ (all fluxes), or v2.1/ (all fluxes, summed over energy) is written.')
+parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1','v2.2'], help='Define wether v1/ (no flux=0) or v2/ (all fluxes), or v2.1/ (all fluxes, summed over energy) is written.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 args,_=parser.parse_known_args()
@@ -80,6 +80,7 @@ N = array('i', [0])
 P_vec = r.std.vector(float)()#it was int
 A_vec = r.std.vector(float)()
 E_vec = r.std.vector(float)()
+L_vec = r.std.vector(float)()
 C = array( 'f', [ 0. ] )
 F_vec_en = r.std.vector(float)(energy_bins)
 F_vec_pt = r.std.vector(float)(9)
@@ -104,6 +105,7 @@ tree.Branch( 'Ldip', Ldip, 'Ldip/F' )
 tree.Branch( 'pitch', P_vec)
 tree.Branch( 'alpha', A_vec)
 tree.Branch( 'energy', E_vec) 
+tree.Branch( 'Lvec', L_vec )
 tree.Branch( 'count', C, 'count/F' )
 tree.Branch( 'nflux', N, 'nflux/I' )
 tree.Branch( 'flux_en', F_vec_en) 
@@ -187,7 +189,6 @@ for iev,evt in enumerate(t):
         if Lshell==-1:
             Lshell = Ldipole
             #print(Lshell)
-        
         # get B field strength at the equator
         Beq = getBeq(Lshell) 
         # in case that Beq>B
@@ -214,15 +215,14 @@ for iev,evt in enumerate(t):
 
             for ien,en in enumerate(energyTab):
                 flux = eval('evt.mep_ele_tel{0}_flux_e{1}'.format(args.telescope,(ien+1)))
-                fluxSquared = flux*flux
 
                 if (ien,Albin) in vecSum:
                     vecSum[(ien,Albin)] += flux #Squared
-                    vecAlphaL[(ien,Albin)] = [vecAlphaL[(ien,Albin)][0]+alpha_eq, round(vecAlphaL[(ien,Albin)][1]+Lshell,1), vecAlphaL[(ien,Albin)][2]+1.]
+                    vecAlphaL[(ien,Albin)] = [vecAlphaL[(ien,Albin)][0]+alpha_eq, vecAlphaL[(ien,Albin)][1]+Lshell, vecAlphaL[(ien,Albin)][2]+1.]
                     vecPitch[(ien,Albin)] += Pvalue
                 else:
                     vecSum[(ien,Albin)] = flux #Squared
-                    vecAlphaL[(ien,Albin)] = [alpha_eq, round(Lshell,1), 1.]
+                    vecAlphaL[(ien,Albin)] = [alpha_eq, Lshell, 1.]
                     vecPitch[(ien,Albin)] = Pvalue
 
         # add next event
@@ -235,23 +235,25 @@ for iev,evt in enumerate(t):
 
     # fill flux branches of L-pitch
     for cell,value in vecSum.items():
+        avL = Lshell #vecAlphaL[cell][1]/vecAlphaL[cell][2]
         # not interested in L shell values > 10
-        if vecAlphaL[cell][1]/vecAlphaL[cell][2] >= 10:
+        if avL >= 10:
             continue
+        avA = vecAlphaL[cell][0]/vecAlphaL[cell][2] 
         # find corresponding L/alpha bin, and use the average Lshell and alpha values
         Lbin=-1
         Albin=-1
         for il in range(l_bins):
-            if l_x_bins[il] <= vecAlphaL[cell][1]/vecAlphaL[cell][2] and l_x_bins[il+1] > vecAlphaL[cell][1]/vecAlphaL[cell][2]:
+            if l_x_bins[il] <= avL and l_x_bins[il+1] > avL:
                 Lbin=il
                 break
         for ia in range(p_bins):
-            if p_x_bins[ia] <= vecAlphaL[cell][0]/vecAlphaL[cell][2] and p_x_bins[ia+1] > vecAlphaL[cell][0]/vecAlphaL[cell][2]:
+            if p_x_bins[ia] <= avA and p_x_bins[ia+1] > avA:
                 Albin=ia
                 break
         if Lbin==-1 or Albin==-1:
-            print('Alpha: ',vecAlphaL[cell][0]/vecAlphaL[cell][2])
-            print('L:     ',vecAlphaL[cell][1]/vecAlphaL[cell][2])
+            print('Alpha: ',avA)
+            print('L:     ',avL)
 
         # test normalisation by entries in L-alpha not integration window
         vecCells[Lbin,Albin].push_back(value / vecAlphaL[cell][2] ) #countIntSec)
@@ -285,8 +287,9 @@ for iev,evt in enumerate(t):
     # fill the vector 'flux' and the corresponding 'energy'/'pitch'/'alpha' vectors
     for (key, value) in vecSum.items():
         F_vecvec.push_back(value / float(vecAlphaL[key][2]))#float(countIntSec))
+        L_vec.push_back(vecAlphaL[key][1] / vecAlphaL[key][2])
         E_vec.push_back(energyTab[key[0]])
-        P_vec.push_back(int(vecPitch[key] / float(vecAlphaL[key][2]))) # normalise if 2 pitch angles ended up in same alpha cell /s
+        P_vec.push_back(int(vecPitch[key] / vecAlphaL[key][2])) # normalise if 2 pitch angles ended up in same alpha cell /s
         A_vec.push_back(vecAlphaL[key][0] / vecAlphaL[key][2]) # normalise if 2 pitch angles ended up in same alpha cell /s
         #Ch_vec.push_back(vecChannel[key])
         if value!=0:
@@ -320,6 +323,7 @@ for iev,evt in enumerate(t):
     vecAlphaL.clear()
     vecChannel.clear()
     E_vec.clear()
+    L_vec.clear()
     P_vec.clear()
     A_vec.clear()
     Ch_vec.clear()

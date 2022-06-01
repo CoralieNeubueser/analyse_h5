@@ -32,7 +32,7 @@ parser.add_argument('--doubleSeed', action='store_true', help='Require two subse
 ### OPTIONS
 parser.add_argument('--originalE', action='store_true', help='Use fine energy binning.')
 parser.add_argument('--fit', action='store_true', help='Fit flux distributions with exponential.')
-parser.add_argument('--sigma', type=str, default='rms99', choices=['rms','rms99','gauss'], help='Use rms or rms99 for high flux selection.')
+parser.add_argument('--sigma', type=str, default='rms99', choices=['rms','rms50','rms99','gauss'], help='Use rms or rms99 for high flux selection.')
 parser.add_argument('--numSigma', type=int, default=1, help='Define number of sigma for selection in mean+xsigma.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
 parser.add_argument('--draw', action='store_true', help='Allows to write out root file with distributions that were used to extract averages, and RMS99.')
@@ -43,7 +43,7 @@ parser.add_argument('--test', action='store_true', help='Analyse test runs.')
 parser.add_argument('--day', type=int, nargs='+', required=False, help='Merge orbits of a specific day [yyyymmdd].')
 parser.add_argument('--month', type=int, required=False, help='Merge orbits of a specific month [yyyymm].')
 
-parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1','v3','v3.1'], help='Define wether flux=0 is stored.')
+parser.add_argument('--useVersion', type=str, default='v2.2', choices=['v1','v2','v2.1','v2.2','v3','v3.1'], help='Define wether flux=0 is stored.')
 parser.add_argument('--submit', action='store_true', help='Submit to HTCondor batch farm.')
 parser.add_argument('--debug', dest='quiet', action='store_false')
 parser.add_argument('-q','--quiet', action='store_true', help='Run without printouts.')
@@ -61,7 +61,7 @@ det = 'hepd'
 data = 'hepd'
 datapaths = []
 
-if args.noaa and version!='v2.1' and version!='v3.1':
+if args.noaa and version!='v2.1' and version!='v.3' and version!='v2.2':
     if version=='v2':
         version = 'v2.1'
     else:
@@ -168,7 +168,7 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
             if not os.path.isdir(buildPath):
                 os.makedirs(buildPath)
             cmd='python3 python/readH5.py --inputFile '+str(run)
-            if version == 'v2.1':
+            if version == 'v2.1' or version == 'v2.2':
                 cmd='python3 python/readH5_v2.1.py --inputFile '+str(run)
             elif version == 'v3':
                 cmd='python3 python/readH5_v3.py --inputFile '+str(run)
@@ -461,6 +461,8 @@ elif args.cluster:
         detPath += '/{0}s'.format(args.integral)
     if args.sigma=='rms99':
         detPath += '/rms99'
+    elif args.sigma=='rms50':
+        detPath += '/rms50'
     elif args.sigma=='rms':
         detPath += '/mean_plus_{0}_rms'.format(args.numSigma)
     elif args.sigma=='gauss':

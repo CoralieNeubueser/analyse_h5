@@ -16,7 +16,7 @@ parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
 parser.add_argument('--data', type=str, choices=['hepd','hepp_l','hepp_h'], required=True, help='Define patht to data file.')
 parser.add_argument('--channel', type=str, choices=['narrow','wide','all'], required=all(item[0] == 'hepp_l' for item in sys.argv), help='Define which set of detectors to use.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
-parser.add_argument('--useVersion', type=str, default='v2.1', choices=['v2.1'], help='Define wether v1/ (no flux=0) or v2/ (all fluxes), or v2.1/ (all fluxes, summed over energy) is written.')
+parser.add_argument('--useVersion', type=str, default='v2.2', choices=['v2.1','v2.2'], help='Define wether v1/ (no flux=0) or v2/ (all fluxes), or v2.1/ (all fluxes, summed over energy) is written.')
 parser.add_argument('--useOriginalEnergyBinning', action='store_true', help='Use fine energy binning.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 args,_=parser.parse_known_args()
@@ -139,6 +139,7 @@ N = array('i', [0])
 P_vec = r.std.vector(int)()
 A_vec = r.std.vector(float)()
 E_vec = r.std.vector(float)()
+L_vec = r.std.vector(float)()
 C = array( 'f', [ 0. ] )
 F_vec_en = r.std.vector(float)(energy_bins)
 F_vec_pt = r.std.vector(float)(9)
@@ -162,7 +163,8 @@ tree.Branch( 'channel', Ch_vec)
 tree.Branch( 'L', L, 'L/F' )
 tree.Branch( 'pitch', P_vec)
 tree.Branch( 'alpha', A_vec)
-tree.Branch( 'energy', E_vec) 
+tree.Branch( 'energy', E_vec)
+tree.Branch( 'Lvec', L_vec) 
 tree.Branch( 'count', C, 'count/F' )
 tree.Branch( 'nflux', N, 'nflux/I' )
 tree.Branch( 'flux_en', F_vec_en) 
@@ -390,13 +392,13 @@ for iev,ev in enumerate(dset2):
                 # store corresponding L/alpha values
                 if (0,Albin) in vecSum:
                     vecSum[(0,Albin)] += fluxEnergyNorm
-                    vecAlphaL[(0,Albin)] = [vecAlphaL[(0,Albin)][0]+alpha_eq, round(vecAlphaL[(0,Albin)][1]+Lshell,1), vecAlphaL[(0,Albin)][2]+1.]
+                    vecAlphaL[(0,Albin)] = [vecAlphaL[(0,Albin)][0]+alpha_eq, vecAlphaL[(0,Albin)][1] + Lshell, vecAlphaL[(0,Albin)][2]+1.]
                     vecPitch[(0,Albin)] += Pvalue
                     if vecSec[(0,Albin)][0]<iev:
                         vecSec[(0,Albin)] = [iev,vecSec[(0,Albin)][1]+1]
                 else:
                     vecSum[(0,Albin)] = fluxEnergyNorm
-                    vecAlphaL[(0,Albin)] = [alpha_eq, round(Lshell,1), 1.]
+                    vecAlphaL[(0,Albin)] = [alpha_eq, Lshell, 1.]
                     vecPitch[(0,Albin)] = Pvalue
                     vecChannel[(0,Albin)] = channel
                     vecSec[(0,Albin)] = [iev, 1]
@@ -404,13 +406,13 @@ for iev,ev in enumerate(dset2):
                 if ie_new>0:
                     if (1,Albin) in vecSum:
                         vecSum[(1,Albin)] += fluxEnergyNorm
-                        vecAlphaL[(1,Albin)] = [vecAlphaL[(1,Albin)][0]+alpha_eq, round(vecAlphaL[(1,Albin)][1]+Lshell,1), vecAlphaL[(1,Albin)][2]+1.]
+                        vecAlphaL[(1,Albin)] = [vecAlphaL[(1,Albin)][0]+alpha_eq, vecAlphaL[(1,Albin)][1] + Lshell, vecAlphaL[(1,Albin)][2]+1.]
                         vecPitch[(1,Albin)] += Pvalue
                         if vecSec[(1,Albin)][0]<iev:
                             vecSec[(1,Albin)] = [iev,vecSec[(1,Albin)][1]+1]
                     else:
                         vecSum[(1,Albin)] = fluxEnergyNorm
-                        vecAlphaL[(1,Albin)] = [alpha_eq, round(Lshell,1), 1.]
+                        vecAlphaL[(1,Albin)] = [alpha_eq, Lshell, 1.]
                         vecPitch[(1,Albin)] = Pvalue
                         vecChannel[(1,Albin)] = channel
                         vecSec[(1,Albin)] = [iev, 1]
@@ -418,13 +420,13 @@ for iev,ev in enumerate(dset2):
                 if ie_new>1:
                     if (2,Albin) in vecSum:
                         vecSum[(2,Albin)] += fluxEnergyNorm
-                        vecAlphaL[(2,Albin)] = [vecAlphaL[(2,Albin)][0]+alpha_eq, round(vecAlphaL[(2,Albin)][1]+Lshell,1), vecAlphaL[(2,Albin)][2]+1.]
+                        vecAlphaL[(2,Albin)] = [vecAlphaL[(2,Albin)][0]+alpha_eq, vecAlphaL[(2,Albin)][2] + Lshell, vecAlphaL[(2,Albin)][2]+1.]
                         vecPitch[(2,Albin)] += Pvalue
                         if vecSec[(2,Albin)][0]<iev:
                             vecSec[(2,Albin)] = [iev,vecSec[(2,Albin)][1]+1]
                     else:
                         vecSum[(2,Albin)] = fluxEnergyNorm
-                        vecAlphaL[(2,Albin)] = [alpha_eq, round(Lshell,1), 1.]
+                        vecAlphaL[(2,Albin)] = [alpha_eq, Lshell, 1.]
                         vecPitch[(2,Albin)] = Pvalue
                         vecChannel[(2,Albin)] = channel
                         vecSec[(2,Albin)] = [iev, 1]
@@ -501,7 +503,8 @@ for iev,ev in enumerate(dset2):
     for (key, value) in vecSum.items():
         F_vecvec.push_back(value / vecSec[key][1]) #float(countIntSec))
         E_vec.push_back(energiesRounded[key[0]])
-        P_vec.push_back(int(vecPitch[key] / float(vecAlphaL[key][2]))) # normalise if 2 pitch angles ended up in same alpha cell /s
+        L_vec.push_back(vecAlphaL[key][1]/vecAlphaL[key][2])
+        P_vec.push_back(int(vecPitch[key] / vecAlphaL[key][2])) # normalise if 2 pitch angles ended up in same alpha cell /s
         A_vec.push_back(vecAlphaL[key][0]/vecAlphaL[key][2]) # normalise if 2 pitch angles ended up in same alpha cell /s
         Ch_vec.push_back(vecChannel[key])
         if value!=0:
@@ -535,6 +538,7 @@ for iev,ev in enumerate(dset2):
     vecChannel.clear()
     vecSec.clear()
     E_vec.clear()
+    L_vec.clear()
     P_vec.clear()
     A_vec.clear()
     Ch_vec.clear()

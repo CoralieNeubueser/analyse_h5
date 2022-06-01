@@ -420,7 +420,8 @@ def getGeomFactor(det,energyBin):
         # taken from https://www.ngdc.noaa.gov/stp/satellite/poes/docs/NGDC/MEPED%20telescope%20processing%20ATBD_V1.pdf
         # found 17.01.2022
         #ele_corr_GF = [100./1.24, 100./1.44, 100./0.75, 100./0.55]
-        ele_corr_GF = [1.24, 1.44, 0.75, 0.55]
+        ele_corr_GF = [1.24/100., 1.44/100., 0.75/100., 0.55/100.]
+        #ele_corr_GF = [1.24, 1.44, 0.75, 0.55]
     return ele_corr_GF[energyBin]
 
 def getInverseGeomFactor(det,energyBin):
@@ -459,8 +460,8 @@ def getCountsBins(det):
         return 50
     elif det=='hepp_l':
         return int(1e6)
-    #elif det=='noaa':
-    #    return int(1e6)
+    elif det=='noaa_poes19_0degree' or det=='noaa_poes19_90degree':
+        return int(1e6)
     else:
         return -1
 

@@ -16,7 +16,7 @@ parser.add_argument('--thr', type=int, default=100, help='Define minimum statist
 parser.add_argument('--numSigma', type=int, default=1, help='Define minimum sigma for flux values > <phi>+sigma*phi_rms.')
 parser.add_argument('--fitted', action='store_true', help='Use exponential fit tau value for threshold.')
 parser.add_argument('--sigma', type=str, default='rms99', choices=['rms99', 'rms','gauss'], help='Set minimum flux by RMS99, RMS or Gaussian fit.')
-parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1','v3'], help='Set the version.')
+parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1','v2.2','v3'], help='Set the version.')
 parser.add_argument('--day', type=int, help='Define the day of the fluxes that are suppose to be stored.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
 parser.add_argument('--tryFit', action='store_true', help='Try to fit count distributions with exponential..')

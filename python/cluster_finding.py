@@ -38,6 +38,8 @@ def main():
     print('Entries before '+str(cut_name), nentries)
 
     n_energy_bins, energy_bins, en_max = getEnergyBins(det, True)
+    print(energy_bins)
+
     time_bin = getTimeBins(det)
     if integral:
         time_bin = integral
@@ -98,8 +100,10 @@ def main():
     index_arr = np.array(time).argsort()
     alpha = np.array(alpha)[index_arr]
     energy = np.array(energy)[index_arr]
+    time = np.array(time)[index_arr] ## MODIFIED BY FF
     L = np.array(L)[index_arr]
-    event_idx = [i for i in range(len(index_arr))]
+
+    event_idx = index_arr#[i for i in range(len(index_arr))] ## MODIFIED BY FF
 
     print('Entries after '+str(cut_name), len(time))
 
@@ -264,20 +268,12 @@ def main():
     print('Nclusters ',n_clusters, np.unique(y))
     y = y.reshape([len(X),1])
 
-
     Xy = np.concatenate((X,np.array(event_idx).reshape([len(X),1])),axis=1)
     Xy = np.concatenate((Xy,y),axis=1)
-    #print(event_idx)
-
-    # nnumber of good clusters
-    n_clusters = len(set(clustering.labels_)) - (1 if -1 in clustering.labels_ else 0)
-    n_noise = list(clustering.labels_).count(-1)
 
     good_cluster_list = np.unique(Xy[Xy[:,-1]!=-1][:,-1])
     good_cluster_index = np.arange(0,len(good_cluster_list))
     cluster_dict = dict(zip(good_cluster_list, good_cluster_index))
-
-    #print('Num good clusters ',len(good_cluster_list), good_cluster_list)
 
     start_cluster = []
     end_cluster = []
@@ -298,11 +294,55 @@ def main():
         if len(all_cluster_ev)<2 and twoseed:
             print("ATTENTION NO DOUBLE SEEDS STORED!")
         
-        #time_stop = 0
-        #while(time_stop<window_size):
-        #    for cls_ev in np.arange(int(np.min(all_cluster_ev),)
+        
+        ##################### START MODIFIED BY FF ####################
+        min_cls_ev = int(np.min(all_cluster_ev))
+        max_cls_ev = int(np.max(all_cluster_ev))+1
+        min_cls_ev_new = min_cls_ev
+        max_cls_ev_new = max_cls_ev
 
-        for cls_ev in np.arange(int(np.min(all_cluster_ev)), int(np.max(all_cluster_ev))+1): #np.arange(int(all_cluster_ev[0]), int(all_cluster_ev[-1])+1): #int(np.min(all_cluster_ev)), int(np.max(all_cluster_ev))):
+        tree_sig.GetEntry(min_cls_ev)
+        day = float(str(tree_sig.day)[-2:])
+        time_hour = float(tree_sig.time)+24.*(day-1)
+        min_cls_time = time_hour*3600.
+        min_cls_time_new = min_cls_time
+
+        tree_sig.GetEntry(max_cls_ev)
+        day = float(str(tree_sig.day)[-2:])
+        time_hour = float(tree_sig.time)+24.*(day-1)
+        max_cls_time = time_hour*3600.
+        max_cls_time_new = max_cls_time
+
+        while (min_cls_time - min_cls_time_new < window_size/2) and (min_cls_ev>0):
+            min_cls_ev = min_cls_ev - 1
+            tree_sig.GetEntry(min_cls_ev)
+            day = float(str(tree_sig.day)[-2:])
+            time_hour = float(tree_sig.time)+24.*(day-1)
+            min_cls_time_new = time_hour*3600.
+            if (min_cls_time - min_cls_time_new < window_size/2)  and (min_cls_time_new>0):
+                min_cls_ev_new = min_cls_ev
+
+        while (max_cls_time_new - max_cls_time < window_size/2) and (max_cls_ev<nentries):
+            max_cls_ev = max_cls_ev + 1
+            tree_sig.GetEntry(max_cls_ev)
+            day = float(str(tree_sig.day)[-2:])
+            time_hour = float(tree_sig.time)+24.*(day-1)
+            max_cls_time_new = time_hour*3600.
+            if (max_cls_time_new - max_cls_time < window_size/2) and (max_cls_ev<nentries):
+                max_cls_ev_new = max_cls_ev
+
+        tree_sig.GetEntry(min_cls_ev_new)
+        day = float(str(tree_sig.day)[-2:])
+        time_hour = float(tree_sig.time)+24.*(day-1)
+        time_start = time_hour*3600
+        tree_sig.GetEntry(max_cls_ev_new)
+        day = float(str(tree_sig.day)[-2:])
+        time_hour = float(tree_sig.time)+24.*(day-1)
+        time_stop = time_hour*3600
+
+        for cls_ev in np.arange(min_cls_ev_new, max_cls_ev_new+1): 
+        #for cls_ev in np.arange(int(all_cluster_ev[0]), int(all_cluster_ev[-1])+1): #int(np.min(all_cluster_ev)), int(np.max(all_cluster_ev))):
+        ##################### END MODIFIED BY FF ####################
             tree_sig.GetEntry(int(cls_ev))
             lat_sign = np.sign(tree_sig.geom_lat)
             #if lat_sign==0:
@@ -357,10 +397,6 @@ def main():
             elif parameters==['Energy']:
                 if (tree_sig.energy == energy_cluster):
                     cls_index =int(cluster_dict[int(cls_i)])
-                    #print(cls_index)
-                    #if int(cls_ev) in cluster_index:
-                    #    print('Flux already assigned.. move on.')
-                    #    continue
                     cluster_index[int(cls_ev)] = cls_index
                     if cls_index in cl_L:
                         cl_L[cls_index].append(tree_sig.L)
@@ -499,10 +535,6 @@ def main():
     cls_spec_new = t.Branch('cls_spec_idx', spec_b, 'cls_spec_idx/I' )
     cls_glat_new = t.Branch('cls_glat', clusters_glat, 'cls_glat/D' )
 
-    #print(nentries)
-    #print(cluster_index)
-    #print(cl_specular)
-
     for i in np.arange(0,nentries):
         t.GetEntry(i)
 
@@ -532,20 +564,6 @@ def main():
 
     t.Write("", r.TObject.kOverwrite)
     newroot.Close()  
-
-    '''
-    for i in np.arange(0,nentries):
-        t.GetEntry(i)
-        if i in Xy[Xy[:,-1]!=-1][:,3]:
-            clsnr_b[0] = cluster_dict[y[Xy[:,3]==i][0][0]]
-        else:
-            clsnr_b[0] = -1
-        thr_b[0] = cut[i]
-        clsnr_new.Fill()
-        thr_new.Fill()
-    newroot.Write("", r.TObject.kOverwrite)
-    newroot.Close()
-    '''
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

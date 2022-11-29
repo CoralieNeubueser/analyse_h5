@@ -87,15 +87,16 @@ F_vec_pt = r.std.vector(float)(9)
 F_vecvec = r.std.vector(float)()#why ?
 T = array( 'f', [ 0. ] )
 Tday = array( 'i', [0] )
-Lo = array( 'i', [ 0 ] ) 
-La = array( 'i', [ 0 ] ) 
-geomLo = array( 'i', [ 0 ] ) 
-geomLa = array( 'i', [ 0 ] ) 
+Lo = array( 'f', [ 0. ] ) 
+La = array( 'f', [ 0. ] ) 
+geomLo = array( 'f', [ 0. ] ) 
+geomLa = array( 'f', [ 0. ] ) 
 B = array( 'f', [ 0. ] )
 B_eq = array( 'f', [ 0. ] )
 Ev = array( 'i', [ 0 ] )
 Ch_vec = r.std.vector(int)()
 Alt = array( 'f', [ 0. ] )
+ascending = array( 'i', [ 0 ] )
 
 tree.Branch( 'event', Ev, 'event/I' )
 tree.Branch( 'channel', Ch_vec)
@@ -113,13 +114,14 @@ tree.Branch( 'flux_pt', F_vec_pt)
 tree.Branch( 'flux', F_vecvec) 
 tree.Branch( 'time', T, 'time/F' )
 tree.Branch( 'day', Tday, 'day/I' )
-tree.Branch( 'Long', Lo, 'Long/I' )
-tree.Branch( 'Lat', La, 'Lat/I' )
-tree.Branch( 'geomLong', geomLo, 'geomLong/I' )
-tree.Branch( 'geomLat', geomLa, 'geomLat/I' )
+tree.Branch( 'Long', Lo, 'Long/F' )
+tree.Branch( 'Lat', La, 'Lat/F' )
+tree.Branch( 'geomLong', geomLo, 'geomLong/F' )
+tree.Branch( 'geomLat', geomLa, 'geomLat/F' )
 tree.Branch( 'field', B, 'field/F' )
 tree.Branch( 'field_eq', B_eq, 'field_eq/F' )
 tree.Branch( 'altitude', Alt, 'altitude/F' )
+tree.Branch( 'ascending', ascending, 'ascending/I' )
 
 if args.integral:
     Norm = r.std.vector(float)()
@@ -165,6 +167,7 @@ countFlux = int(0)
 #loop on input file entries
 countEv = 1
 countIntSec = 0
+prevLat = 999
 for iev,evt in enumerate(t): 
 
     if ( countEv%10000 ==0 ) :
@@ -173,15 +176,24 @@ for iev,evt in enumerate(t):
 
     if (math.floor(float(iev)/xMeasurements) < countEv):
         countIntSec += 1
+        ascendingOrbit = False
+        if prevLat < evt.lat or prevLat==999:
+            ascendingOrbit = True
+        elif prevLat == 999:
+            prevLat = evt.lat
+            t.GetEntry(iev+1)
+            if prevLat < t.lat:
+                ascendingOrbit = True
 
         # calculate daytime in h from msec
         daytime = evt.msec/1e3/60/60
         # lingitude in CSES way..
-        longitude = int(evt.lon)
-        geomLongitude = int(evt.maglon)
+        longitude = evt.lon
+        geomLongitude = evt.maglon
         if evt.lon>180:
-            longitude = int(evt.lon) - 360
-            geomLongitude = int(evt.maglon) - 360
+            longitude = evt.lon - 360
+        if evt.maglon>180:
+            geomLongitude = evt.maglon - 360
 
         Lshell = evt.L_IGRF
         radiusInER = ( RE + evt.alt )/RE
@@ -261,7 +273,7 @@ for iev,evt in enumerate(t):
         
         # fill histograms                 
         hist2D_l_pitch.Fill(l_x_bins[Lbin], p_x_bins[Albin], value / vecAlphaL[cell][2]) #float(countIntSec))
-        hist2D_loc_flux.Fill(longitude, int(evt.lat),  value / vecAlphaL[cell][2]) #/ float(countIntSec))
+        hist2D_loc_flux.Fill(int(longitude), int(evt.lat),  value / vecAlphaL[cell][2]) #/ float(countIntSec))
         
         if cell[0]==0:
             hist2D_l_pitch_en_zero.Fill(l_x_bins[Lbin], p_x_bins[Albin])
@@ -270,7 +282,7 @@ for iev,evt in enumerate(t):
 
         # fill 2D histograms / event                                                             
         # time of half-orbit
-        bint = hist2D_loc_field.GetBin(hist2D_loc_field.GetXaxis().FindBin(longitude),hist2D_loc_field.GetYaxis().FindBin(int(evt.lat)),0)
+        bint = hist2D_loc_field.GetBin(hist2D_loc_field.GetXaxis().FindBin(int(longitude)),hist2D_loc_field.GetYaxis().FindBin(int(evt.lat)),0)
         if hist2D_loc.GetBinContent(bint)==0.:
             hist2D_loc.SetBinContent(bint, float(daytime))
         # B field of the earth
@@ -307,14 +319,16 @@ for iev,evt in enumerate(t):
     # NOTE: lon,lat and geomag related are float in the native data
     # here converted to int ...
     Lo[0] = longitude
-    La[0] = int(evt.lat)
+    La[0] = evt.lat
     geomLo[0] = geomLongitude
     geomLa[0] = int(evt.maglat)
     B[0] = abs(evt.btotsat)
     B_eq[0] = abs(Beq)
     N[0] = energy_bins
     Alt[0] = evt.alt
-    
+    ascending[0] = ascendingOrbit
+    prevLat = evt.lat
+
     # fill tree
     tree.Fill()
     # clean-up

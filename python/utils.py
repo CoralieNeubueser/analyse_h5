@@ -1,4 +1,4 @@
-import os,sys,math
+import os,sys,math,csv
 import subprocess
 import time
 import numpy as np
@@ -79,11 +79,15 @@ def getTimeBins(det):
 def getEnergyBins(det, rebinned):
     if det=='hepd':
         # original upper bin edges: [[ 4. 8.96811 10.9642  13.4045  16.388   20.0355  24.4949  29.9468  36.6122  44.7611  54.7237  66.9037 ]]
-        return 12, [2.0, 6.5, 10.0, 12.2, 14.9, 18.2, 22.3, 27.2, 33.3, 40.7, 49.7, 60.8], 66.9
+        # lower bin edges: [[ 0.5 4. 8.96811 10.9642  13.4045  16.388   20.0355  24.4949  29.9468  36.6122  44.7611  54.7237 ]] 
+        # bin center: [2.0, 6.5, 10.0, 12.2, 14.9, 18.2, 22.3, 27.2, 33.3, 40.7, 49.7, 60.8]
+        return 12, [0.5, 4.0, 9.0, 11.0, 13.4, 16.4, 20.0, 24.5, 29.9, 36.6, 44.8, 54.7], 66.9
     elif 'noaa' in det:
         return 4, [0.04, 0.13, 0.287, 0.612], 0.612
     elif det=='hepp_l' and rebinned:
-        return 16, [0.1, 0.28125, 0.4625, 0.64375, 0.825, 1.00625, 1.1875, 1.36875, 1.55, 1.73125, 1.9125, 2.09375, 2.275, 2.45625, 2.6375, 2.81875], 3
+        # William binning 26.09.2022
+        return 11, [0.1, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95, 1.05], 3
+        #return 16, [0.1, 0.28125, 0.4625, 0.64375, 0.825, 1.00625, 1.1875, 1.36875, 1.55, 1.73125, 1.9125, 2.09375, 2.275, 2.45625, 2.6375, 2.81875], 3
     elif det=='hepp_l' and not rebinned:
         return 256, [0.1, 0.11137255, 0.1227451,  0.13411765, 0.1454902,  0.15686275,
                      0.1682353 , 0.17960784, 0.1909804 , 0.20235294, 0.21372551, 0.22509804,
@@ -389,6 +393,17 @@ def getEnergyBins(det, rebinned):
                      54.78831100463867,
                      55.0], 55.0
 
+def getEnergyBins_v2o2(det, rebinned):
+    if det=='hepd':
+        # original upper bin edges: [[ 4. 8.96811 10.9642  13.4045  16.388   20.0355  24.4949  29.9468  36.6122  44.7611  54.7237  66.9037 ]]
+        # lower bin edges: [[ 0.5 4. 8.96811 10.9642  13.4045  16.388   20.0355  24.4949  29.9468  36.6122  44.7611  54.7237 ]]
+        # bin center: [2.0, 6.5, 10.0, 12.2, 14.9, 18.2, 22.3, 27.2, 33.3, 40.7, 49.7, 60.8]
+        return 12, [0.5, 4.0, 9.0, 11.0, 13.4, 16.4, 20.0, 24.5, 29.9, 36.6, 44.8, 54.7], 66.9
+    elif 'noaa' in det:
+        return 4, [0.04, 0.13, 0.287, 0.612], 0.612
+    elif det=='hepp_l' and rebinned:
+        return 16, [0.1, 0.28125, 0.4625, 0.64375, 0.825, 1.00625, 1.1875, 1.36875, 1.55, 1.73125, 1.9125, 2.09375, 2.275, 2.45625, 2.6375, 2.81875], 3   
+
 # returns the geometrical correction factor for hepd data, per energy bin
 def getGeomCorr(hepd, energyBin):
     # geometrical factors
@@ -407,9 +422,28 @@ def getGeomFactor(det,energyBin):
         ele_corr_GF = [ 131.128, 545.639, 560.297, 530.937, 477.827, 413.133, 334.176, 252.3, 204.52, 103.216, 77.5552, 61.1536 ]
         #ele_corr_GF = 12*[0.]
     elif det=='hepp_l_channel_narrow':
-        ele_corr_GF = 16*[0.12] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+        ele_corr_GF = 256*[0.12] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
     elif det=='hepp_l_channel_wide':
-        ele_corr_GF = 16*[0.73] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+        ele_corr_GF = 256*[0.73] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+    elif det=='hepp_l_channel_0':
+        ele_corr_GF = 256*[0.12] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+    elif det=='hepp_l_channel_1':
+        ele_corr_GF = 256*[0.73] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+    elif det=='hepp_l_channel_2':
+        ele_corr_GF = 256*[0.12] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+    elif det=='hepp_l_channel_3':
+        ele_corr_GF = 256*[0.73] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+    elif det=='hepp_l_channel_4':
+        ele_corr_GF = 256*[0.12] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+    elif det=='hepp_l_channel_5':
+        ele_corr_GF = 256*[0.73] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+    elif det=='hepp_l_channel_6':
+        ele_corr_GF = 256*[0.12] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+    elif det=='hepp_l_channel_7':
+        ele_corr_GF = 256*[0.73] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+    elif det=='hepp_l_channel_8':
+        ele_corr_GF = 256*[0.12] # 1. The geometrical factors of HEPP-L is 0.12 cm^2 sr for 5 detectors and 0.73 cm^2 sr for 4 detectors. (Zhenxia priv. comm: 12 May 2021)
+
     # the geometrical factor is mixed between the channels.. use the smallest.
     elif det=='hepp_l_channel_all':
         ele_corr_GF = 16*[0.12]
@@ -426,12 +460,13 @@ def getGeomFactor(det,energyBin):
 
 def getInverseGeomFactor(det,energyBin):
     ele_corr_GF = getGeomFactor(det,energyBin)
-    if det=='hepd':
-        # reverse correction, and use original factor
-        ele_GF = [ 0.76, 188.26, 326.64, 339.65, 344.99, 331.83, 304.73, 263.56, 217.33, 169.48, 117.31, 71.45 ]
-        return getGeomCorr(det,energyBin) / ele_GF[energyBin]
-    else:
-        return 1./ele_corr_GF
+    #if det=='hepd':
+    # reverse correction, and use original factor
+    #    ele_corr_GF = [ 131.128, 545.639, 560.297, 530.937, 477.827, 413.133, 334.176, 252.3, 204.52, 103.216, 77.5552, 61.1536 ]
+    ## ele_GF = [ 0.76, 188.26, 326.64, 339.65, 344.99, 331.83, 304.73, 263.56, 217.33, 169.48, 117.31, 71.45 ]
+    #    return 1./ele_corr_GF[energyBin] #getGeomCorr(det,energyBin) / ele_GF[energyBin]
+    #else:
+    return 1./ele_corr_GF
 
 # returns the energy bin width, used to normalise fluxes to counts/s/cm2/sr/MeV 
 def getEnergyBinWidth(det, energyBin):
@@ -490,6 +525,11 @@ def readAverageFile(fileName,storedEn,method='rms99'):
             # energy L pitch entries mean meanErr rms rmsErr mean_counts meanErr_counts mpv sigma chi2 avGeomIndex
             # fill dictionary from (L, alpha) -> (mean, rms, mpv, mpvErr, sigma, sigaErr) 
             av_Lalpha[en_index].update( {( columns[1],int(columns[2]) ):( columns[4],columns[6],columns[10],columns[11],columns[12],columns[13],columns[14] )} )
+        elif 'rms50' in method:
+            # fill dictonary
+            # energy L pitch entries mean meanErr rms rmsErr mean_5rms50 rms_5rms50 mean_4rms50 rms_4rms50 mean_3rms50 rms_3rms50 rms50_frac avGeomIndex
+            # fill dictonary from (L, alpha) -> (mean_5rms50, rms_5rms50, mean_4rms50, rms_4rms50, mean_3rms50, rms_3rms50)
+            av_Lalpha[en_index].update( {( columns[1],int(columns[2]) ):( columns[4],columns[6],columns[8],columns[9],columns[10],columns[11],columns[12],columns[13],columns[14] )} )
         else:
             # fill dictionary from (L, alpha) -> (mean, rms, rms99, rms99Err, rms99_of_99, rmsErr_99_of_99, weight)
             av_Lalpha[en_index].update( {( columns[1],int(columns[2]) ):( columns[4],columns[6],columns[10],columns[11],columns[12],columns[13],columns[14] )} )
@@ -770,6 +810,28 @@ def readIGRF(day):
         newDict[pair] = float(mag)
     return newDict
 
+
+def readIGRF_csv(day):
+
+    dataPath = sharedOutPath()+"/data/geomField/"+str(day)+'_field.csv'
+    
+    newDict={}
+    # opening the CSV file 
+    with open(dataPath, mode='r') as file:
+        
+        # reading the CSV file
+        csvFile = csv.reader(file)
+        
+        # displaying the contents of the CSV file
+        for il,lines in enumerate(csvFile):
+            if il==0:
+                continue
+            d, lat, lon, mag = lines #.strip().split(' ')
+            pair = (int(d.replace('-','')), int(lat), int(lon))
+            newDict[pair] = float(mag)
+
+    return newDict
+
 def getGeomIndex(dic, day):
     ###
     print(str(day)[0:4])
@@ -812,3 +874,24 @@ def getSAAcut(det):
         return 22000
     else:
         return 25000
+
+## read calibration periods for NOAA POES-19 satellite detectors
+## expects YYYYMM as month as integer and full name of det (noaa_poes19_0degree/noaa_poes19_90degree)
+def readCalibRuns(det, month):
+    pathToFiles = sharedOutPath()+'/data/calibRuns/'+det+'/'
+    filename = pathToFiles + str(month) + '_calibPeriod.txt'
+    if os.path.exists(filename):
+        print("For calibration periods, read in ", filename)
+        file = open(filename,'r')
+        next(file)
+        lines = file.readlines()[7:]
+        calibDict={}
+        for line in lines:
+            day, h_start, h_stop = line.strip().split(' ')
+            calibDict[int(day)] = float(h_start), float(h_stop)
+        return calibDict
+    else:
+        print("ATTENTION!!! NO CALIB PERIOD FILE AVAILABLE")
+        return None
+
+    

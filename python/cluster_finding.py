@@ -38,6 +38,9 @@ def main():
     print('Entries before '+str(cut_name), nentries)
 
     n_energy_bins, energy_bins, en_max = getEnergyBins(det, True)
+    if '/v2.2/' in input_file:
+        n_energy_bins, energy_bins, en_max = getEnergyBins_v2o2(det, True)
+
     print(energy_bins)
 
     time_bin = getTimeBins(det)
@@ -103,7 +106,7 @@ def main():
     time = np.array(time)[index_arr] ## MODIFIED BY FF
     L = np.array(L)[index_arr]
 
-    event_idx = index_arr#[i for i in range(len(index_arr))] ## MODIFIED BY FF
+    event_idx = [i for i in range(len(index_arr))] ## MODIFIED BY FF
 
     print('Entries after '+str(cut_name), len(time))
 
@@ -297,7 +300,7 @@ def main():
         
         ##################### START MODIFIED BY FF ####################
         min_cls_ev = int(np.min(all_cluster_ev))
-        max_cls_ev = int(np.max(all_cluster_ev))+1
+        max_cls_ev = int(np.max(all_cluster_ev))
         min_cls_ev_new = min_cls_ev
         max_cls_ev_new = max_cls_ev
 
@@ -344,7 +347,7 @@ def main():
         #for cls_ev in np.arange(int(all_cluster_ev[0]), int(all_cluster_ev[-1])+1): #int(np.min(all_cluster_ev)), int(np.max(all_cluster_ev))):
         ##################### END MODIFIED BY FF ####################
             tree_sig.GetEntry(int(cls_ev))
-            lat_sign = np.sign(tree_sig.geom_lat)
+            lat_sign = int(np.sign(tree_sig.geom_lat))
             #if lat_sign==0:
             #    lat_sign=None
             d_hour = int(math.floor(tree_sig.time))
@@ -564,6 +567,7 @@ def main():
 
     t.Write("", r.TObject.kOverwrite)
     newroot.Close()  
+    os.system('chmod -R g+rwx %s'%(input_file))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

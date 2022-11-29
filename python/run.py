@@ -8,7 +8,7 @@ parser.add_argument('--hepp_l', action='store_true', help='Analyse HEPP-L data.'
 parser.add_argument('--hepp_h', action='store_true', help='Analyse HEPP-H data.')
 parser.add_argument('--noaa', action='store_true', help='Analyse NOAA data.')
 ### DETAILS OF INSTRUMENTS
-parser.add_argument('--channel', type=str, required= '--hepp_l' in sys.argv,  choices=['narrow','wide','all'], help='Choose narrow, wide, or all channels to be read.')
+parser.add_argument('--channel', type=str, required= '--hepp_l' in sys.argv,  choices=['narrow','wide','all','0','1','2','3','4','5','6','7','8'], help='Choose narrow, wide, or all channels to be read.')
 parser.add_argument('--satellite', type=int, choices=[19], default=19, help='Define satellite.')
 parser.add_argument('--telescope', type=int, choices=[0,90], default=0, help='Define telescope.')
 
@@ -32,18 +32,19 @@ parser.add_argument('--doubleSeed', action='store_true', help='Require two subse
 ### OPTIONS
 parser.add_argument('--originalE', action='store_true', help='Use fine energy binning.')
 parser.add_argument('--fit', action='store_true', help='Fit flux distributions with exponential.')
-parser.add_argument('--sigma', type=str, default='rms99', choices=['rms','rms50','rms99','gauss'], help='Use rms or rms99 for high flux selection.')
+parser.add_argument('--sigma', type=str, default='rms99', choices=['rms','rms50_3','rms50_4','rms50_5','rms99','gauss'], help='Use rms or rms99 for high flux selection.')
 parser.add_argument('--numSigma', type=int, default=1, help='Define number of sigma for selection in mean+xsigma.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
 parser.add_argument('--draw', action='store_true', help='Allows to write out root file with distributions that were used to extract averages, and RMS99.')
 parser.add_argument('--allHists', action='store_true', help='Merge all runs, including the histograms.')
 parser.add_argument('--test', action='store_true', help='Analyse test runs.')
+parser.add_argument('--threshold', type=int, default=100, help='Pick a number as minimum statistic in histograms.')
 
 ### define specific period to run over
 parser.add_argument('--day', type=int, nargs='+', required=False, help='Merge orbits of a specific day [yyyymmdd].')
 parser.add_argument('--month', type=int, required=False, help='Merge orbits of a specific month [yyyymm].')
 
-parser.add_argument('--useVersion', type=str, default='v2.2', choices=['v1','v2','v2.1','v2.2','v3','v3.1'], help='Define wether flux=0 is stored.')
+parser.add_argument('--useVersion', type=str, default='v2.2', choices=['v1','v2','v2.1','v2.2','v2.3','v3','v3.1','v4'], help='Define wether flux=0 is stored.')
 parser.add_argument('--submit', action='store_true', help='Submit to HTCondor batch farm.')
 parser.add_argument('--debug', dest='quiet', action='store_false')
 parser.add_argument('-q','--quiet', action='store_true', help='Run without printouts.')
@@ -85,10 +86,10 @@ elif args.hepp_l:
     data = 'hepp_l'
     det = 'hepp_l_channel_'+args.channel
     # get HEPP data of quiet period 1.-5.08.2018
-    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*_{0}*.h5'.format(args.month)) #('/storage/gpfs_data/limadou/data/flight_data/analysis/data/h5/HEPP_august_2018/*.h5')
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*_{0}*_{0}*.h5'.format(args.month)) #('/storage/gpfs_data/limadou/data/flight_data/analysis/data/h5/HEPP_august_2018/*.h5')
     if args.day:
         for d in args.day:
-            datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*_{0}*.h5'.format(d))
+            datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1_L02*_{0}*_{0}*.h5'.format(d))
     # select HEPP data from 22-26.02.2019 (solar quiet period) 
     #datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190222*.h5')
     #datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_1*20190223*.h5')
@@ -99,14 +100,16 @@ elif args.hepp_h:
     data = 'hepp_h'
     det = 'hepp_h'
     # get HEPP data of quiet period 1.-5.08.2018
-    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*{0}*.h5'.format(args.month))
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*{0}*{0}*.h5'.format(args.month))
     if args.day:
         for d in args.day:
-            datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*{0}*.h5'.format(d))
+            datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*{0}*{0}*.h5'.format(d))
 elif args.noaa:
     data = 'noaa'
     det = 'noaa_poes{0}_{1}degree'.format(args.satellite, args.telescope)
     datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data/poes_n{1}_{0}*_proc.nc.root'.format(args.month,args.satellite))
+    # older data for CEASAR
+    #datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data22/poes_n{1}_{0}*_proc.nc.root'.format(args.month,args.satellite))
     #datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data_spec/poes_n19_{0}*_proc.nc.root'.format(args.month))
     if args.day:
         for d in args.day:
@@ -168,7 +171,7 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
             if not os.path.isdir(buildPath):
                 os.makedirs(buildPath)
             cmd='python3 python/readH5.py --inputFile '+str(run)
-            if version == 'v2.1' or version == 'v2.2':
+            if 'v2.1' in version or 'v2.2' in version:
                 cmd='python3 python/readH5_v2.1.py --inputFile '+str(run)
             elif version == 'v3':
                 cmd='python3 python/readH5_v3.py --inputFile '+str(run)
@@ -188,7 +191,7 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
                 cmd+=' --data hepp_h'
             if version is not 'v2':
                 cmd+=' --useVersion '+version
-            if args.originalE:
+            if args.originalE or version=='v2.3':
                 cmd+=' --useOriginalEnergyBinning '
             print(cmd)
             totCmd[math.floor(toProcessFiles/10)] += cmd+'\n'
@@ -240,41 +243,42 @@ elif args.merge and not args.test:
     findOlds = []
     days = []
     runs = []
+
+    pathToFind = '{0}data/root/{1}/{2}/'.format(sharedOutPath(),version,det)
+    if args.originalE:
+        pathToFind += 'originalEnergyBins/'
+    elif args.integral:
+        pathToFind = '{0}data/root/{1}/{2}/{3}s/'.format(sharedOutPath(),version,det,args.integral)
+    runList = []
+
     if args.hepd:
         # write 
         # mges.append( '{0}data/root/{1}/hepd/all_hepd.root'.format(sharedOutPath(),version) )
-        runList = []
         if args.day:
-            for iD,d in enumerate(args.day):
-                runList.append( glob.glob('{0}data/root/{1}/hepd/CSES_HEP_DDD_*{2}*.root'.format(sharedOutPath(),version,d)) )
-                mges.append( '{0}data/root/{1}/hepd/all_hepd_{2}_{3}_runs.root'.format(sharedOutPath(),version,d,len(runList)) )
-                findOlds.append( glob.glob('{0}data/root/{1}/hepd/all_hepd_{2}*.root'.format(sharedOutPath(),version,d)) )
-                runs.append( len(runList[iD]) )
+            for d in args.day:
+                runList.append( glob.glob('{0}CSES_HEP_DDD_*{1}*.root'.format(pathToFind,d)) )
+                mges.append( '{0}all_hepd_{1}_{2}_runs.root'.format(pathToFind,d,len(runList[0])) )
+                findOlds.append( glob.glob('{0}all_hepd_{1}*.root'.format(pathToFind,d)) )
+                runs.append( len(runList[0]) )
+                days.append(d)
         elif args.month:
             for d in range(1,32):
                 strD = str(d)
                 if d<10:
                     strD = '0'+str(d)
-                runList.append( glob.glob('{0}data/root/{1}/hepd/CSES_HEP_DDD_*_{2}{3}_*.root'.format(sharedOutPath(),version,args.month,strD)) )
-                mges.append( '{0}data/root/{1}/hepd/all_hepd_{2}{4}_{3}_runs.root'.format(sharedOutPath(),version,args.month,len(runList),strD) )
-                findOlds.append( glob.glob('{0}data/root/{1}/hepd/all_hepd_{2}{3}*'.format(sharedOutPath(),version,args.month,strD)) )
+                runList.append( glob.glob('{0}CSES_HEP_DDD_*_{1}{2}_*.root'.format(pathToFind,args.month,strD)) )
+                mges.append( '{0}all_hepd_{1}{3}_{2}_runs.root'.format(pathToFind,args.month,len(runList[d-1]),strD) )
+                findOlds.append( glob.glob('{0}all_hepd_{1}*'.format(pathToFind,str(args.month)+strD)) )
                 runs.append(len(runList[d-1]))
+                days.append(str(args.month)+strD)
         else:
-            runList.append( glob.glob('{0}data/root/{1}/hepd/CSES_HEP_DDD_*.root'.format(sharedOutPath(),version)) )
+            runList.append( glob.glob('{0}CSES_HEP_DDD_*.root'.format(pathToFind)) )
             runs.append( len(runList[0]) )
 
     elif args.hepp_l or args.hepp_h: 
         index=1
         if args.hepp_h:
             index=2
-        pathToFind = '{0}data/root/{1}/{2}/'.format(sharedOutPath(),version,det)
-        if args.originalE:
-            pathToFind += 'originalEnergyBins/'
-        elif args.integral:
-            pathToFind = '{0}data/root/{1}/{2}/{3}s/'.format(sharedOutPath(),version,det,args.integral)
-
-        #mge = pathToFind+'all_'+det+'.root'
-        runList = [] #glob.glob('{0}CSES_01_HEP_{1}_L02*.root'.format(pathToFind,index))
 
         if args.day:
             for d in args.day:
@@ -337,8 +341,8 @@ elif args.merge and not args.test:
     #print(mges,days)
     totCmds = []
     for imge,mge in enumerate(mges):
-        cmd = 'python3 python/writeDayAverages.py --useVersion {0} --inputFile {1} --data {2} --sigma {3} --day {4} '.format(version, mge, det, args.sigma,days[imge])
-        if args.originalE:
+        cmd = 'python3 python/writeDayAverages.py --useVersion {0} --inputFile {1} --data {2} --sigma {3} --day {4} --threshold {5} '.format(version, mge, det, args.sigma,days[imge],args.threshold)
+        if version=='v2.3' or args.originalE:
             cmd += '--originalEnergyBins '
         if args.draw:
             cmd += '--drawHistos '
@@ -357,7 +361,7 @@ elif args.merge and not args.test:
         if job=="":
             continue
         if args.submit:
-            exefilename = 'job_%s_%s_%s_%s_%s.sh'%(version,det,os.path.basename(mges[ijob]),args.sigma,ijob)
+            exefilename = 'job_%s_%s_%s_%s_%s_%s.sh'%(version,det,os.path.basename(mges[ijob]),args.sigma,args.threshold,ijob)
             if args.integral:
                 exefilename = exefilename.replace('_runs','_runs_int_'+str(args.integral)+'s')
                 exefilename = exefilename.replace('proc','int_'+str(args.integral)+'s')
@@ -365,6 +369,7 @@ elif args.merge and not args.test:
             print("Write execution file to:", exefilename)
             args_file.write("%s\n"%(home()+'/log/'+exefilename))
         else:
+            print(job)
             os.system(job)
 
     args_file.close()
@@ -426,9 +431,9 @@ elif args.select:
         print(foundFile[0], foundFile[1])
         strDay = foundFile[1]
         dayint = int(strDay)
-        cmd = 'python3 python/findHighFluxes.py --inputFile {0} --data {1} --sigma {2} --numSigma {3} --useVersion {4}'.format(foundFile[0],det,args.sigma,args.numSigma,version)
+        cmd = 'python3 python/findHighFluxes.py --inputFile {0} --data {1} --sigma {2} --numSigma {3} --useVersion {4} --thr {5}'.format(foundFile[0],det,args.sigma,args.numSigma,version,args.threshold)
         if version == 'v3' or version == 'v3.1':
-            cmd = 'python3 python/findHighFluxes_v3.py --inputFile {0} --data {1} --sigma {2} --numSigma {3} --useVersion {4}'.format(foundFile[0],det,args.sigma,args.numSigma,version)
+            cmd = 'python3 python/findHighFluxes_v3.py --inputFile {0} --data {1} --sigma {2} --numSigma {3} --useVersion {4} --thr {5}'.format(foundFile[0],det,args.sigma,args.numSigma,version,args.threshold)
         if args.integral:
             cmd += ' --integral {0}'.format(args.integral)
         if args.day:
@@ -461,12 +466,15 @@ elif args.cluster:
         detPath += '/{0}s'.format(args.integral)
     if args.sigma=='rms99':
         detPath += '/rms99'
-    elif args.sigma=='rms50':
-        detPath += '/rms50'
+    elif 'rms50' in args.sigma:
+        detPath += '/{0}_mean_plus_{1}_rms'.format(args.sigma, args.numSigma)
     elif args.sigma=='rms':
         detPath += '/mean_plus_{0}_rms'.format(args.numSigma)
     elif args.sigma=='gauss':
         detPath += '/mpv_plus_{0}_sigma'.format(args.numSigma)
+    # adjust path to files, if slection was based on !=100 events per cell
+    if args.threshold!=100:
+        detPath += '_{}ev'.format(args.threshold)
 
     fileSnip = 'all_highFluxes_{}_'.format(det)
     thresholdDir = '{0}data/thresholds/{1}/{2}/'.format(sharedOutPath(),version,detPath)
@@ -532,10 +540,10 @@ elif args.cluster:
     if not os.path.exists( clusterOutdir ):
         print("Directory is created: ", clusterOutdir)
         os.makedirs( clusterOutdir )
-    elif os.path.isfile( clusterOutdir+os.path.basename(clusterInput) ) and not args.force:
-        overwrite = input('Clustering already done, do you want to over-write? [y/n] ')
-        if overwrite=="n":
-            alreadyDone=True
+    #elif os.path.isfile( clusterOutdir+os.path.basename(clusterInput) ):
+    #    overwrite = input('Clustering already done, do you want to over-write? [y/n] ')
+    #    if overwrite=="n":
+    #        alreadyDone=True
 
     if not alreadyDone:
         os.system('cp '+clusterInput+' '+clusterOutdir)
@@ -577,41 +585,59 @@ if args.clean:
     if args.integral:
         print('integral')
         detPath += '/'+str(args.integral)+'s'
+    
     print(detPath)
     datapaths = glob.glob('{0}data/root/{1}/{2}/C*{3}*000.root'.format(sharedOutPath(),version,detPath,args.month))
+    if args.hepd:
+        datapaths = glob.glob('{0}data/root/{1}/{2}/C*{3}*.root'.format(sharedOutPath(),version,detPath,args.month))
+
     print(datapaths)
-    if not (args.hepp_l or args.hepp_h):
+
+    if not (args.hepp_l or args.hepp_h or args.hepd):
         print("Clean-up only necessary for HEPP data. ")
         datapaths = []
 
-    # cleanup of double orbit index
-    lastOrbit={}
-    orbit_file={}
-
     removeOrbits=0
-    for orbit in datapaths:
-        h_t = os.path.split(orbit)
-        size = os.path.getsize(orbit)
-        #print( 'Current orbit: ',h_t[1], size )
-        numbers=re.findall('\d+', h_t[1])
-        orbit_index = int(numbers[4])
-        #print(orbit_index)
 
-        if orbit_index in lastOrbit:
-            #print('Orbit index found.')
+    if (args.hepp_l or args.hepp_h):
+        # cleanup of double orbit index
+        lastOrbit={}
+        orbit_file={}
 
-            if size<lastOrbit[orbit_index]:
-                print('found orbit with larger size. Remove this one.')
+        for orbit in datapaths:
+            h_t = os.path.split(orbit)
+            size = os.path.getsize(orbit)
+            #print( 'Current orbit: ',h_t[1], size )
+            numbers=re.findall('\d+', h_t[1])
+            orbit_index = int(numbers[4])
+            #print(orbit_index)
+
+            if orbit_index in lastOrbit:
+                #print('Orbit index found.')
+
+                if size<lastOrbit[orbit_index]:
+                    print('found orbit with larger size. Remove this one.')
+                    os.remove(orbit)
+                    removeOrbits+=1
+                else:
+                    print('found orbit, but with smaller size (current, previous):')
+                    print(size, lastOrbit[orbit_index])
+                    print('remove the other file: ', orbit_file[orbit_index])
+                    os.remove(orbit_file[orbit_index])
+                    removeOrbits+=1
+
+            lastOrbit[orbit_index]=size
+            orbit_file[orbit_index]=orbit
+
+    elif args.hepd:
+        # size of zombie files: 1215
+        # remove zombies
+        # remove others: 26597
+        for orbit in datapaths:
+            size = os.path.getsize(orbit)
+            if size <=30000: #1215:
+                print(os.path.getsize(orbit))
                 os.remove(orbit)
                 removeOrbits+=1
-            else:
-                print('found orbit, but with smaller size (current, previous):')
-                print(size, lastOrbit[orbit_index])
-                print('remove the other file: ', orbit_file[orbit_index])
-                os.remove(orbit_file[orbit_index])
-                removeOrbits+=1
-
-        lastOrbit[orbit_index]=size
-        orbit_file[orbit_index]=orbit
 
     print("Number of orbits that get removed: ",removeOrbits )

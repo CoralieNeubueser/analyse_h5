@@ -11,11 +11,11 @@ r.gStyle.SetOptStat(0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.', required=True)
-parser.add_argument('--data', type=str, choices=['hepd','hepp_l_channel_narrow','hepp_l_channel_wide','hepp_l_channel_all','hepp_h','noaa_poes19_0degree','noaa_poes19_90degree'], help='Define input data.', required=True)
+parser.add_argument('--data', type=str, choices=['hepd','hepp_l_channel_narrow','hepp_l_channel_wide','hepp_l_channel_all','hepp_l_channel_0','hepp_l_channel_1','hepp_l_channel_2','hepp_l_channel_3','hepp_l_channel_4','hepp_l_channel_5','hepp_l_channel_6','hepp_l_channel_7','hepp_l_channel_8','hepp_h','noaa_poes19_0degree','noaa_poes19_90degree'], help='Define input data.', required=True)
 parser.add_argument('--thr', type=int, default=100, help='Define minimum statistics used.')
-parser.add_argument('--numSigma', type=int, default=1, help='Define minimum sigma for flux values > <phi>+sigma*phi_rms.')
+parser.add_argument('--numSigma', type=int, default=3, help='Define minimum sigma for flux values > <phi>+sigma*phi_rms.')
 parser.add_argument('--fitted', action='store_true', help='Use exponential fit tau value for threshold.')
-parser.add_argument('--sigma', type=str, default='rms99', choices=['rms99', 'rms','gauss'], help='Set minimum flux by RMS99, RMS or Gaussian fit.')
+parser.add_argument('--sigma', type=str, default='rms99', choices=['rms99', 'rms','rms50_3','rms50_4','rms50_5','gauss'], help='Set minimum flux by RMS99, RMS or Gaussian fit.')
 parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1','v2.2','v3'], help='Set the version.')
 parser.add_argument('--day', type=int, help='Define the day of the fluxes that are suppose to be stored.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
@@ -34,7 +34,7 @@ print(l_fine_bins)
 print(Pbins)
 # retrieve energy bins for either hepd: True, hepp: False
 rebin=False
-if args.data=='hepp_l' or args.data=='hepp_h' or args.data=='hepp_l_channel_narrow' or args.data=='hepp_l_channel_wide':
+if 'hepp_l' in args.data or args.data=='hepp_h':
     rebin=True
 det=args.data
 method=args.sigma
@@ -44,6 +44,8 @@ if 'hepp_l' in args.data:
     maxFluxForHist=1000000
 #print(det)
 en_bins, energies, en_max = getEnergyBins(det, rebin)
+if args.useVersion=='v2.2':
+    en_bins, energies, en_max = getEnergyBins_v2o2(det, rebin)
 
 hist2D = []
 hist2D_en = []
@@ -69,6 +71,8 @@ if energies!=test_energies:
     en_bins=len(test_energies)
 print("Energy bins: ", energies)
 storedEn = [round(en,1) for en in energies]
+if 'hepp_l' in args.data and args.useVersion=='v2':
+    storedEn = [round(en,2) for en in energies]
 print(storedEn)
 
 # output tree
@@ -82,12 +86,23 @@ if 'noaa' in det:
     replacement = 'all_highFluxes_'+det
 outfilename = os.path.basename(filename.replace(fileSnip,replacement))
 outpath = os.path.dirname(filename)+'/'
+
+methodDirName = ''
 if method=='rms99':
-    outpath = outpath+"rms99/"
+    methodDirName = "rms99"
+elif 'rms50' in method:
+    methodDirName = method+"_mean_plus_"+str(args.numSigma)+"_rms"
 elif method=='rms':
-    outpath = outpath+"mean_plus_"+str(args.numSigma)+"_rms/"
+    methodDirName = "mean_plus_"+str(args.numSigma)+"_rms"
 elif method=='gauss':
-    outpath = outpath+"mpv_plus_"+str(args.numSigma)+"_sigma/"
+    methodDirName = "mpv_plus_"+str(args.numSigma)+"_sigma"
+
+if args.thr!=100:
+    methodDirName += '_'+str(args.thr)+'ev/'
+else:
+    methodDirName += '/'
+
+outpath = outpath + methodDirName
 if not os.path.exists( outpath ):
     os.makedirs( outpath )
 if args.fitted:
@@ -98,6 +113,7 @@ outRoot = r.TFile( outpath+outfilename, 'recreate' )
 out_tree = r.TTree( 'events', 'tree of fluxes' )
 
 Ev = array('i', [0])
+Orbit = array('i', [0])
 Flux = array( 'f', [0.] )
 Signal = array( 'f', [0.] )
 Channel = array( 'i', [0] )
@@ -106,10 +122,10 @@ Time = array( 'f', [0.] )
 Fraction = array( 'f', [0.] )
 TotN = array( 'i', [0] )
 ActN = array( 'i', [0] )
-Longitude = array('i', [0])
-Latitude = array('i', [0])
-Longitude_geom = array('i', [0])
-Latitude_geom = array('i', [0])
+Longitude = array('f', [0.])
+Latitude = array('f', [0.])
+Longitude_geom = array('f', [0.])
+Latitude_geom = array('f', [0.])
 Altitude = array('f', [0.])
 Lshell = array('f', [0.])
 Lshell_unbinned = array('f', [0.])
@@ -125,9 +141,11 @@ Weight = array('f', [0.])
 MPV = array('f', [0.])
 SIGMA = array('f', [0.])
 CHI2 = array('f', [0.])
+THR = array('f', [0.])
 GeomInd = array('i', [0])
 
 out_tree.Branch( 'event', Ev, 'event/I' )
+out_tree.Branch( 'orbit', Orbit, 'orbit/I' )
 out_tree.Branch( 'flux', Flux, 'flux/F' )
 out_tree.Branch( 'counts', Signal, 'counts/F' )
 out_tree.Branch( 'channel', Channel, 'channel/I' )
@@ -136,10 +154,10 @@ out_tree.Branch( 'time', Time, 'time/F' )
 out_tree.Branch( 'fraction', Fraction, 'fraction/F' )
 out_tree.Branch( 'totN', TotN, 'totN/I' )
 out_tree.Branch( 'actN', ActN, 'actN/I' )
-out_tree.Branch( 'lon', Longitude, 'lon/I' )
-out_tree.Branch( 'lat', Latitude, 'lat/I' )
-out_tree.Branch( 'geom_lon', Longitude_geom, 'geom_lon/I' )
-out_tree.Branch( 'geom_lat', Latitude_geom, 'geom_lat/I' )
+out_tree.Branch( 'lon', Longitude, 'lon/F' )
+out_tree.Branch( 'lat', Latitude, 'lat/F' )
+out_tree.Branch( 'geom_lon', Longitude_geom, 'geom_lon/F' )
+out_tree.Branch( 'geom_lat', Latitude_geom, 'geom_lat/F' )
 out_tree.Branch( 'altitude', Altitude, 'altitude/F' )
 out_tree.Branch( 'L', Lshell, 'L/F' )
 out_tree.Branch( 'L_unbinned', Lshell_unbinned, 'L_unbinned/F' )
@@ -155,6 +173,7 @@ out_tree.Branch( 'weight', Weight, 'weight/F' )
 out_tree.Branch( 'mpv', MPV, 'mpv/F' )
 out_tree.Branch( 'sigma', SIGMA, 'sigma/F' )
 out_tree.Branch( 'chi2', CHI2, 'chi2/F' )
+out_tree.Branch( 'thr', THR, 'thr/F' )
 out_tree.Branch( 'geomIndex', GeomInd, 'geomIndex/I' )
 
 # get a list of all days, for which data was taken
@@ -174,6 +193,13 @@ if args.integral:
 dataDict = readGeomIndex()
 
 for day in days:
+
+    # identify calibration period in NOAA data to reject in event loop
+    if 'noaa' in det:
+        calibDict = readCalibRuns(det,int(str(day)[:6]))
+        # print(calibDict, d)
+        if day in calibDict:
+            h_sta, h_sto = calibDict[day]
     
     # prepare histograms
     hist2D = [ r.TH2D('hist2D_flux_'+str(day)+'_'+str(en)+'MeV', 'hist2D_flux_'+str(day)+'_'+str(en)+'MeV', l_bins, np.array(l_fine_bins), numPbin-1, np.array(Pbins,dtype=float)) for en in energies]
@@ -188,11 +214,14 @@ for day in days:
         path += str(args.integral)+'s/'
     if method=='gauss':
         path += 'gauss/'
-    
+    elif 'rms50' in method:
+        path += 'rms50/'
+    if args.thr!=100:
+        path += str(args.thr)+'ev/'
+
     print("Average/RMS read from file: ", path+str(day)+'_min_'+str(args.thr)+'ev.txt')
 
     av_Lalpha = readAverageFile(path+str(day)+'_min_'+str(args.thr)+'ev.txt', storedEn, method)
-
 
     # calculate measure fraction available for anaylsis per day
     countMeasurementsPerDay = 0
@@ -224,6 +253,11 @@ for day in days:
         # L-range
         if math.floor(L)>=10. or L<1:
             continue
+        # reject calibration periods
+        if 'noaa' in det:
+            if ev.day in calibDict:
+                if ev.time>=h_sta and ev.time<=h_sto:
+                    continue
             
         # run over max. 1000 events in debug mode
         if args.debug and ev.event>1000:
@@ -254,11 +288,23 @@ for day in days:
                 rms = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][1]
                 rms99,rms99Err,rms99of99,weight,chi2,mpv,gauss = -1,-1,-1,-1,-1,-1,-1
                 
-                if method!='gauss':
+                if method=='rms' or method=='rms99':
                     weight = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][6]
                     rms99 = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][2]
                     rms99Err = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][3]
                     rms99of99 = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][4]
+                elif method=='rms50_5':
+                    average = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][2]
+                    rms = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][3]
+                    rms50_5 = rms
+                elif method=='rms50_4':
+                    average = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][4]
+                    rms = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][5]
+                    rms50_4 = rms
+                elif method=='rms50_3':
+                    average = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][6]
+                    rms = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][7]
+                    rms50_3 = rms
                 else:
                     gauss = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][4]
                     mpv = av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][2]
@@ -276,9 +322,8 @@ for day in days:
                         xSigma = mpv + args.numSigma*gauss
                     else:
                         xSigma = average + args.numSigma*rms
-                elif method=='rms':
+                elif method=='rms' or 'rms50' in method:
                     xSigma = average + args.numSigma*rms
-
 
                 flux=ev.flux[ia]
                 counts=ev.flux[ia]/invGeomFactor
@@ -288,15 +333,17 @@ for day in days:
                     if args.debug:
                         print("L-alpha :        ", ev.L, alpha)
                         print("L-alpha bins :   ", L_bin, alpha_bin)
-                        print("average flux     ", average)
-                        print("rms:             ", rms)
+                        print("average flux     ", av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][0])
+                        print("rms:             ", av_Lalpha[energy_bin][(L_binValue, alpha_binValue)][1])
                         if method=='rms99':
                             print("rms99:           ", rms99)
                         elif method=='gauss':
                             print("mpv:             ", mpv)
                             print("sigma:           ", gauss)
                             print("chi2:            ", chi2)
-                            
+                        elif 'rms50' in method:
+                            print('mean_rms50:      ', average)
+                            print('rms_rms50:       ', rms)
                         print('X sigma:              ', xSigma)
                         if not method=='rms99':
                             print('Found flux/counts:    ', flux) 
@@ -318,6 +365,7 @@ for day in days:
                         geoIndex = -1
                     # fill output tree
                     Ev[0] = count
+                    Orbit[0] = ev.orbit
                     Flux[0] = flux
                     if invGeomFactor!=0:
                         # define signal as #counts, rmsErr is half-width of flux distributions
@@ -355,6 +403,7 @@ for day in days:
                     MPV[0] = mpv
                     SIGMA[0] = gauss
                     CHI2[0] = chi2
+                    THR[0] = xSigma
                     out_tree.Fill()
 
                     if Signal[0]>maxCounts:

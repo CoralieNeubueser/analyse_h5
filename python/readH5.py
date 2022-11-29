@@ -14,9 +14,9 @@ r.gStyle.SetPadRightMargin(0.2)
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
 parser.add_argument('--data', type=str, choices=['hepd','hepp_l','hepp_h'], required=True, help='Define patht to data file.')
-parser.add_argument('--channel', type=str, choices=['narrow','wide','all'], required=all(item[0] == 'hepp_l' for item in sys.argv), help='Define which set of detectors to use.')
+parser.add_argument('--channel', type=str, choices=['narrow','wide','0','1','2','3','4','5','6','7','8','all'], required=all(item[0] == 'hepp_l' for item in sys.argv), help='Define which set of detectors to use.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
-parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2'], help='Define wether v1/ (no flux=0) or v2/ (all fluxes), or v2.1/ (all fluxes, summed over energy) is written.')
+parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.3','v4'], help='Define wether v1/ (no flux=0) or v2/ (all fluxes), or v2.1/ (all fluxes, summed over energy) is written.')
 parser.add_argument('--useOriginalEnergyBinning', action='store_true', help='Use fine energy binning.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 args,_=parser.parse_known_args()
@@ -94,13 +94,22 @@ p_bins, p_x_bins = getPitchBins()
 if args.data=='hepp_l' or args.data=='hepp_h':
     hepp = True
     head, tail = os.path.split(filename)
+    numbers = re.findall('\d+', tail)
+    orbit_index = int(numbers[4])
     # CSES_01_HEP_1_L02_A4_069070_20190502_144452_20190502_152151_000
     times = re.findall('\d+', tail)
     time_blanc = int(str(times[5]+times[6]))  #int(str(times[1]+times[2])) #str(dset_time[0])
     time_blanc_min = str(times[7]+times[8]) #int(str(times[3]+times[4])) #dset_time[maxEv-1][0]
-    # read field map             
-    fieldMap = readIGRF(times[5])
+    # read field map
+    fieldMap = readIGRF_csv(times[5])
+    #fieldMap = readIGRF(times[5])
     #print(fieldMap)
+elif args.data=='hepd':
+    # CSES_HEP_DDD_0050621_20190101_062903_20190101_070349_L3_0000061251
+    head, tail = os.path.split(filename)
+    numbers = re.findall('\d+', tail)
+    orbit_index = int(numbers[0])
+
 time_min = int(str(time_blanc)[-6:-4])*60*60 +  int(str(time_blanc)[-4:-2])*60 +  int(str(time_blanc)[-2:])
 
 # prepare root output
@@ -135,28 +144,32 @@ N = array('i', [0])
 P_vec = r.std.vector(int)()
 A_vec = r.std.vector(float)()
 E_vec = r.std.vector(float)()
+L_vec = r.std.vector(float)()
 C = array( 'f', [ 0. ] )
 F_vec_en = r.std.vector(float)(energy_bins)
 F_vec_pt = r.std.vector(float)(9)
 F_vecvec = r.std.vector(float)()
 T = array( 'f', [ 0. ] )
 Tday = array( 'i', [0] )
-Lo = array( 'i', [ 0 ] )
-La = array( 'i', [ 0 ] )
-geomLo = array( 'i', [ 0 ] )
-geomLa = array( 'i', [ 0 ] )
+Lo = array( 'f', [ 0. ] )
+La = array( 'f', [ 0. ] )
+geomLo = array( 'f', [ 0. ] )
+geomLa = array( 'f', [ 0. ] )
 B = array( 'f', [ 0. ] )
 B_eq = array( 'f', [ 0. ] )
 Alt = array( 'f', [ 0. ] )
 Ev = array( 'i', [ 0 ] )
+Orbit = array( 'i', [ 0 ] )
 Ch_vec = r.std.vector(int)()
 
 tree.Branch( 'event', Ev, 'event/I' )
+tree.Branch( 'orbit', Orbit, 'orbit/I' )
 tree.Branch( 'channel', Ch_vec)
 tree.Branch( 'L', L, 'L/F' )
 tree.Branch( 'pitch', P_vec)
 tree.Branch( 'alpha', A_vec)
 tree.Branch( 'energy', E_vec) 
+tree.Branch( 'Lvec', L_vec)
 tree.Branch( 'count', C, 'count/F' )
 tree.Branch( 'nflux', N, 'nflux/I' )
 tree.Branch( 'flux_en', F_vec_en) 
@@ -164,16 +177,19 @@ tree.Branch( 'flux_pt', F_vec_pt)
 tree.Branch( 'flux', F_vecvec) 
 tree.Branch( 'time', T, 'time/F' )
 tree.Branch( 'day', Tday, 'day/I' )
-tree.Branch( 'Long', Lo, 'Long/I' )
-tree.Branch( 'Lat', La, 'Lat/I' )
-tree.Branch( 'geomLong', geomLo, 'geomLong/I' )
-tree.Branch( 'geomLat', geomLa, 'geomLat/I' )
+tree.Branch( 'Long', Lo, 'Long/F' )
+tree.Branch( 'Lat', La, 'Lat/F' )
+tree.Branch( 'geomLong', geomLo, 'geomLong/F' )
+tree.Branch( 'geomLat', geomLa, 'geomLat/F' )
 tree.Branch( 'field', B, 'field/F' )
 tree.Branch( 'field_eq', B_eq, 'field_eq/F' )
 tree.Branch( 'altitude', Alt, 'altitude/F' )
 
+Norm = r.std.vector(float)()
+tree.Branch( 'norm', Norm)
+
 # define the L-pitch map
-energyBins = getEnergyBins(args.data, rebin)
+energyBins = getEnergyBins(args.data, False)
 
 vecCells = {} 
 for cell_l in range(0,len(l_x_bins)-1):
@@ -210,6 +226,7 @@ vecSum = defaultdict(dict)
 vecAlphaL = defaultdict(dict)
 vecPitch = defaultdict(dict)
 vecChannel = defaultdict(dict)
+vecSec = defaultdict(dict)
 
 countFlux = int(0)
 
@@ -222,10 +239,10 @@ countEv = 1
 countIntSec = 0
 
 for iev,ev in enumerate(dset2):
-    lonInt = int(0)
-    latInt = int(0)
-    gmlonInt = int(0)
-    gmlatInt = int(0)
+    lon = float(0)
+    lat = float(0)
+    gmlon = float(0)
+    gmlat = float(0)
     Bfield = float(0.)
     Lshell = float(0.)
     day = int(0)
@@ -245,28 +262,31 @@ for iev,ev in enumerate(dset2):
             day = int(str(dset_time[iev])[-14:-6])
             year = int(str(dset_time[iev])[-14:-10])
 
-            lonInt = int(dset_lon[iev][0])
-            latInt = int(dset_lat[iev][1])
-            gmlonInt = int(dset_gmlon[iev][0])
-            gmlatInt = int(dset_gmlat[iev][1])
+            lon = dset_lon[iev][0]
+            lat = dset_lat[iev][1]
+            gmlon = dset_gmlon[iev][0]
+            gmlat = dset_gmlat[iev][1]
             Bfield = dset_field[iev]
             BfieldSum += Bfield
             Lshell = dset1[iev]
             countInt = dset_count[iev]
                 
         elif args.data=='hepp_l' or args.data=='hepp_h':
-            # fill tree and histos for HEPP data 
-            time_calc = time_min + iev #60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
+            # fill tree and histos for HEPP data
+            time_file = 60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
+            time_calc = time_min + iev
+            #print(time_calc - time_file)
             time_act = (time_calc-time_min)/60.
-            daytime = time_calc/60./60.
+            # time from filename is exactly 1 minute off, take the times as stored in file 
+            daytime = time_file/60./60. #time_calc/60./60.
             day = int(str(time_blanc)[-14:-6])
             year = int(str(time_blanc)[-14:-10])
 
-            lonInt = int(dset_lon[iev][0]) #[0])
-            latInt = int(dset_lat[iev][0]) #[1])
-            gmlonInt = int(dset_gmlon[iev][0])
-            gmlatInt = int(dset_gmlat[iev][0]) #[1])
-            Bfield = fieldMap[(int(times[5]), latInt, lonInt)]
+            lon = dset_lon[iev][0] #[0])
+            lat = dset_lat[iev][0] #[1])
+            gmlon = dset_gmlon[iev][0]
+            gmlat = dset_gmlat[iev][0] #[1])
+            Bfield = fieldMap[(int(times[5]), int(lat), int(lon))]
             BfieldSum += Bfield
             Lshell = dset1[iev][0]
 
@@ -288,14 +308,49 @@ for iev,ev in enumerate(dset2):
             print("Day:                    ", day)
             print("B field [nT]:           ", Bfield)
             print("L-value:                ", Lshell)
-            print("LON/LAT:                ", lonInt,latInt)
-            print("GMLON/GMLAT:            ", gmlonInt, gmlatInt)
+            print("LON/LAT:                ", lon,lat)
+            print("GMLON/GMLAT:            ", gmlon, gmlat)
             print("Beq [nT]:               ", round(Beq,2))
             print("Count:   ", countInt)
             if iev==4:
                 print("ATTENTION!!! in debug mode only 4 events will be processed! use -q")
                 break
     
+        # identify pitch angle range 
+        pitchAngleRange = set()
+        if version=='v4' and args.data=='hepd':
+            for ie,en in enumerate(ev):
+                for ip,flux in enumerate(en):
+                    if flux!=0:
+                        pitchAngleRange.add(ip)
+            #print(pitchAngleRange)
+
+        # if rebin, merge fluxes in new energy bins, before integration over time
+        if rebin:
+            newEv = np.zeros((energy_bins,len(ev[0]))) #np.array[[],[]]#[0.]*len(ev[0])*energy_bins
+            # loop through energy bins
+            for ie,en in enumerate(ev):
+                # loop through pitch  
+                for ip,flux in enumerate(en):
+                    original_energy = energyBins[1][ie]
+                    iE=0
+                    while iE<energy_bins:
+                        energyBinLow = energyTab[iE]
+                        if len(energyTab)<(iE+1):
+                            energyBinHigh = energyTab[iE+1]
+                        else:
+                            energyBinHigh = energyMax
+                        if original_energy >= energyBinLow and original_energy < energyBinHigh:
+                            ie_new = iE
+                        elif original_energy==energyMax:
+                            ie_new = iE
+                        iE+=1
+
+                    newEv[ie_new,ip] += flux
+            ev = newEv
+        #print(ev)
+        #print(ev[0])
+        #print(ev[0][0])
         # loop through energy bins
         for ie,en in enumerate(ev):
             # loop through pitch
@@ -303,8 +358,15 @@ for iev,ev in enumerate(dset2):
                 ip_new = ip
                 ie_new = ie
                 # store only fluxes>0 in v1/
-                if version == 'v1' and flux==0:
+                if version=='v1' and flux==0:
                     continue
+                if version=='v4' and args.data=='hepd':
+                    if not ip in list(pitchAngleRange): 
+                        continue
+
+                ## reject for HEPD data artificial 0 in local pitch angles not covered
+                #elif len(nonZero)==0: #and flux==0:
+                #    continue
                 # select pitch angles correspnding to narrow/wide HEPP-L channels
                 if args.data=='hepp_l':
                     if ip&1 and args.channel=='narrow':
@@ -313,6 +375,9 @@ for iev,ev in enumerate(dset2):
                     elif not ip&1 and args.channel=='wide':
                         # gerade: narrow opening angle
                         continue                        
+                    elif ip!=int(args.channel):
+                        # allow to select single channels
+                        continue
 
                 # rebin the HEPP-H entries from 36 to 9
                 if args.data == 'hepp_h':
@@ -340,16 +405,13 @@ for iev,ev in enumerate(dset2):
                         Pvalue = (dset_p[0][ip]+dset_p[0][ip-1])/2.
                         if ip==0:
                             Pvalue = dset_p[0][ip]/2.
-                    # rebin the energy range from 256 to 16
-                    if rebin:
-                        ie_new = int(ie/16.)
-                    
                     vec_en[ie_new] += fluxSquared
 
                 else:
                     Pvalue = (dset_p[0][ip]+dset_p[0][ip-1])/2.
                     if ip==0:
                         Pvalue = dset_p[0][ip]/2.
+
                     vec_en[ie_new] += fluxSquared
                 
                 if math.isnan(Pvalue):
@@ -360,21 +422,31 @@ for iev,ev in enumerate(dset2):
                 vec_pt[ip_new] += fluxSquaredEnergyNorm
                 # calculate equatorial pitch angle
                 alpha_eq = getAlpha_eq( Pvalue, Bfield, Beq )
+                Albin=-1
+                for ia in range(p_bins):
+                    if p_x_bins[ia] <= alpha_eq and p_x_bins[ia+1] > alpha_eq:
+                        Albin=ia
+                        break
+
                 # channel is 0 for HEPD and HEPP 
                 channel = 0
                 if args.data=='hepp_l':
                     channel = ip
+
                 # fill Energy-local pitch matrix
                 # store corresponding L/alpha values
-                if (ie_new,ip_new) in vecSum:
-                    vecSum[(ie_new,ip_new)] += flux
-                    vecAlphaL[(ie_new,ip_new)] = [vecAlphaL[(ie_new,ip_new)][0]+alpha_eq, round(vecAlphaL[(ie_new,ip_new)][1]+Lshell,1), vecAlphaL[(ie_new,ip_new)][2]+1.]
-                    vecPitch[(ie_new,ip_new)] += Pvalue
+                if (ie_new,Albin) in vecSum:
+                    vecSum[(ie_new,Albin)] += flux
+                    vecAlphaL[(ie_new,Albin)] = [vecAlphaL[(ie_new,Albin)][0]+alpha_eq, vecAlphaL[(ie_new,Albin)][1]+Lshell, vecAlphaL[(ie_new,Albin)][2]+1.]
+                    vecPitch[(ie_new,Albin)] += Pvalue
+                    if vecSec[(ie_new,Albin)][0]<iev:
+                        vecSec[(ie_new,Albin)] = [iev,vecSec[(ie_new,Albin)][1]+1]
                 else:
-                    vecSum[(ie_new,ip_new)] = flux
-                    vecAlphaL[(ie_new,ip_new)] = [alpha_eq, round(Lshell,1), 1.]
-                    vecPitch[(ie_new,ip_new)] = Pvalue
-                    vecChannel[(ie_new,ip_new)] = channel
+                    vecSum[(ie_new,Albin)] = flux
+                    vecAlphaL[(ie_new,Albin)] = [alpha_eq, Lshell, 1.]
+                    vecPitch[(ie_new,Albin)] = Pvalue
+                    vecChannel[(ie_new,Albin)] = channel
+                    vecSec[(ie_new,Albin)] = [iev, 1]
 
                 if iev<5 and args.debug:
                     print("--- Energy bin:      ", ie_new)
@@ -384,6 +456,7 @@ for iev,ev in enumerate(dset2):
                     print("--- Pitch:           ", Pvalue)
                     print("--- Orig. pitch bin: ", ip)
                     print("--- Pitch_eq:        ", alpha_eq)
+                    print("--- Pitch_eq bin:    ", Albin)
                     print("--- Flux:            ", flux)
                     print("--- Flux/EnergyBin:  ", fluxEnergyNorm)
                     print("--- Flux2:           ", fluxSquared)
@@ -413,20 +486,23 @@ for iev,ev in enumerate(dset2):
             if p_x_bins[ia] <= vecAlphaL[cell][0]/vecAlphaL[cell][2] and p_x_bins[ia+1] > vecAlphaL[cell][0]/vecAlphaL[cell][2]:
                 Albin=ia
                 break
-        if Lbin==-1 or Albin==-1:
-            print('Alpha: ',vecAlphaL[cell][0]/vecAlphaL[cell][2])
+        if Lbin==-1:
             print('L:     ',vecAlphaL[cell][1]/vecAlphaL[cell][2])
+            if vecAlphaL[cell][1]/vecAlphaL[cell][2] < 1:
+                Lbin=0
+        if Albin==-1:
+            print('Alpha: ',vecAlphaL[cell][0]/vecAlphaL[cell][2])
 
-        vecCells[Lbin,Albin].push_back(value / vecAlphaL[cell][2]) #countIntSec)
+        vecCells[Lbin,Albin].push_back(value / vecSec[cell][1]) #vecAlphaL[cell][2]) #countIntSec)
         vecCellsEn[Lbin,Albin].push_back( energiesRounded[cell[0]] )
                     
         # fill histograms
-        hist2D_l_pitch.Fill(l_x_bins[Lbin], p_x_bins[Albin], float(value)/vecAlphaL[cell][2]) #float(countIntSec))
+        hist2D_l_pitch.Fill(l_x_bins[Lbin], p_x_bins[Albin], float(value)/vecSec[cell][1]) #vecAlphaL[cell][2]) #float(countIntSec))
         hist2D_l_pitch_en.Fill(l_x_bins[Lbin], p_x_bins[Albin])
-        hist2D_loc_flux.Fill(lonInt, latInt, value/vecAlphaL[cell][2]) #float(countIntSec))
+        hist2D_loc_flux.Fill(lon, lat, value/vecSec[cell][1]) #vecAlphaL[cell][2]) #float(countIntSec))
         # fill 2D histograms / event
         # time of half-orbit
-        bint = hist2D_loc_field.GetBin(hist2D_loc_field.GetXaxis().FindBin(lonInt),hist2D_loc_field.GetYaxis().FindBin(latInt),0)
+        bint = hist2D_loc_field.GetBin(hist2D_loc_field.GetXaxis().FindBin(int(lon)),hist2D_loc_field.GetYaxis().FindBin(int(lat)),0)
         if hist2D_loc.GetBinContent(bint)==0.:
             hist2D_loc.SetBinContent(bint, float(daytime))
         # B field of the earth
@@ -446,25 +522,29 @@ for iev,ev in enumerate(dset2):
 
     # fill the vector 'flux' and the corresponding 'energy'/'pitch'/'alpha' vectors
     for (key, value) in vecSum.items():
-        F_vecvec.push_back(value / vecAlphaL[key][2]) #float(countIntSec))
+        F_vecvec.push_back(value / vecSec[key][1]) #vecAlphaL[key][2]) #float(countIntSec))
         E_vec.push_back(energiesRounded[key[0]])
-        P_vec.push_back(int(vecPitch[key] / float(vecAlphaL[key][2]))) # normalise if 2 pitch angles ended up in same alpha cell /s
-        A_vec.push_back(vecAlphaL[key][0]/vecAlphaL[key][2]) # normalise if 2 pitch angles ended up in same alpha cell /s
+        L_vec.push_back(vecAlphaL[key][1] / vecAlphaL[key][2])
+        P_vec.push_back(int(vecPitch[key] / vecAlphaL[key][2])) # normalise if 2 pitch angles ended up in same alpha cell /s
+        A_vec.push_back(vecAlphaL[key][0] / vecAlphaL[key][2]) # normalise if 2 pitch angles ended up in same alpha cell /s
         Ch_vec.push_back(vecChannel[key])
+        Norm.push_back( vecSec[key][1] )
+
         if value!=0:
             countFlux+=1
 
     # fill tree with measures / 1s*integral
     # effectively filles the values for the last integral time point
     Ev[0] = countEv
+    Orbit[0] = orbit_index
     L[0] = Lshell
     T[0] = daytime # in hours
     Tday[0] = day 
     C[0] = countInt
-    Lo[0] = lonInt
-    La[0] = latInt
-    geomLo[0] = gmlonInt
-    geomLa[0] = gmlatInt
+    Lo[0] = lon
+    La[0] = lat
+    geomLo[0] = gmlon
+    geomLa[0] = gmlat
     B[0] = Bfield
     B_eq[0] = Beq
     N[0] = countFlux
@@ -478,6 +558,7 @@ for iev,ev in enumerate(dset2):
     vecAlphaL.clear()
     vecChannel.clear()
     E_vec.clear()
+    L_vec.clear()
     P_vec.clear()
     A_vec.clear()
     Ch_vec.clear()
@@ -494,6 +575,8 @@ for iev,ev in enumerate(dset2):
         vecCells[vec].clear()
     for vec in vecCellsEn:
         vecCellsEn[vec].clear()
+    Norm.clear()
+
     # reset counter
     countEv += 1
     countIntSec = 0

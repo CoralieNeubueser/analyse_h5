@@ -261,9 +261,10 @@ for iev,ev in enumerate(dset2):
                 
         elif args.data=='hepp_l' or args.data=='hepp_h':
             # fill tree and histos for HEPP data 
-            time_calc = time_min + iev #60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
-            time_act = (time_calc-time_min)/60.
-            daytime = time_calc/60./60.
+            time_file = 60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
+            #time_calc = time_min + iev #60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
+            #time_act = (time_calc-time_min)/60.
+            daytime = time_file/60./60.
             day = int(str(time_blanc)[-14:-6])
             year = int(str(time_blanc)[-14:-10])
 

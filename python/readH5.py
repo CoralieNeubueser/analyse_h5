@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
 parser.add_argument('--data', type=str, choices=['hepd','hepp_l','hepp_h'], required=True, help='Define patht to data file.')
 parser.add_argument('--channel', type=str, choices=['narrow','wide','0','1','2','3','4','5','6','7','8','all'], required=all(item[0] == 'hepp_l' for item in sys.argv), help='Define which set of detectors to use.')
-parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
+parser.add_argument('--integral', type=int, default=1, help='Define the time window for integration in seconds.')
 parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.3','v4'], help='Define wether v1/ (no flux=0) or v2/ (all fluxes), or v2.1/ (all fluxes, summed over energy) is written.')
 parser.add_argument('--useOriginalEnergyBinning', action='store_true', help='Use fine energy binning.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
@@ -128,8 +128,8 @@ else:
     outRootName = sharedOutPath()+"/data/root/"+version+"/"+args.data+"/"+rootName
     if args.data=='hepp_l':
         outRootName = sharedOutPath()+"/data/root/"+version+"/"+args.data+"_channel_"+args.channel+"/"+rootName
-    if args.useOriginalEnergyBinning:
-        outRootName = sharedOutPath()+"/data/root/"+version+"/"+args.data+"/originalEnergyBins/"+rootName
+    #if args.useOriginalEnergyBinning:
+    #    outRootName = sharedOutPath()+"/data/root/"+version+"/"+args.data+"/originalEnergyBins/"+rootName
     if integral!=1:
         outRootName = sharedOutPath()+"/data/root/"+version+"/"+args.data+"/"+str(args.integral)+"s/"+rootName
         if args.data=='hepp_l':
@@ -141,6 +141,7 @@ tree = r.TTree( 'tree', 'tree with histos' )
 
 L = array( 'f', [ 0. ] )
 N = array('i', [0])
+Night = array( 'i', [ 0 ] )
 P_vec = r.std.vector(int)()
 A_vec = r.std.vector(float)()
 E_vec = r.std.vector(float)()
@@ -166,6 +167,7 @@ tree.Branch( 'event', Ev, 'event/I' )
 tree.Branch( 'orbit', Orbit, 'orbit/I' )
 tree.Branch( 'channel', Ch_vec)
 tree.Branch( 'L', L, 'L/F' )
+tree.Branch( 'ascending', Night, 'ascending/I' )
 tree.Branch( 'pitch', P_vec)
 tree.Branch( 'alpha', A_vec)
 tree.Branch( 'energy', E_vec) 
@@ -233,6 +235,8 @@ countFlux = int(0)
 # use energy bins as defined in h5 table
 energies = energyTab
 energiesRounded = [round(x,2) for x in energyTab]
+if args.useOriginalEnergyBinning and args.data=='hepp_l':
+    energiesRounded = [round(x,4) for x in energyTab]
 hepd = False
 
 countEv = 1
@@ -249,6 +253,7 @@ for iev,ev in enumerate(dset2):
     daytime = float(0.)
     Beq = float(0.)
     countInt = int(0)
+    prevLat = None
 
     if (math.floor(float(iev)/float(integral)) < countEv):
         countIntSec += 1
@@ -279,7 +284,7 @@ for iev,ev in enumerate(dset2):
             time_act = (time_calc-time_min)/60.
             # time from filename is exactly 1 minute off, take the times as stored in file 
             daytime = time_file/60./60. #time_calc/60./60.
-            day = int(str(time_blanc)[-14:-6])
+            day = int(str(dset_time[iev][0])[:4] + str(dset_time[iev][0])[4:6] + str(dset_time[iev][0])[6:8]) #int(str(time_blanc)[-14:-6])
             year = int(str(time_blanc)[-14:-10])
 
             lon = dset_lon[iev][0] #[0])
@@ -303,6 +308,27 @@ for iev,ev in enumerate(dset2):
             #continue
 
         BeqSum += Beq
+
+        # determine wether orbit is ascending
+        if prevLat:
+            if prevLat < lat:
+                ascending = 1
+            elif prevLat > lat:
+                ascending = 0 
+        else:
+            if iev+1 < len(dset):
+                lat_next = dset_lat[iev+1][0]
+                if lat < lat_next:
+                    ascending = 1
+                else:
+                    ascending = 0
+
+            else:
+                lat_prev = dset_lat[iev-1][0]
+                if lat > lat_prev:
+                    ascending = 1
+                else:
+                    ascending = 0
         
         if iev<5 and args.debug:
             print("Day:                    ", day)
@@ -368,7 +394,7 @@ for iev,ev in enumerate(dset2):
                 #elif len(nonZero)==0: #and flux==0:
                 #    continue
                 # select pitch angles correspnding to narrow/wide HEPP-L channels
-                if args.data=='hepp_l':
+                if args.data=='hepp_l' and not args.channel=='all':
                     if ip&1 and args.channel=='narrow':
                         # ungerade: wide opening angle                                                                                                                                            
                         continue
@@ -378,7 +404,7 @@ for iev,ev in enumerate(dset2):
                     elif ip!=int(args.channel):
                         # allow to select single channels
                         continue
-
+                        
                 # rebin the HEPP-H entries from 36 to 9
                 if args.data == 'hepp_h':
                     ip_new = int(ip/4.)
@@ -453,6 +479,7 @@ for iev,ev in enumerate(dset2):
                     print("--- Energy:          ", energiesRounded[ie_new])
                     print("--- Orig. energy bin:", ie)
                     print("--- Pitch bin:       ", ip_new)
+                    print("--- Channel:         ", channel)
                     print("--- Pitch:           ", Pvalue)
                     print("--- Orig. pitch bin: ", ip)
                     print("--- Pitch_eq:        ", alpha_eq)
@@ -462,6 +489,8 @@ for iev,ev in enumerate(dset2):
                     print("--- Flux2:           ", fluxSquared)
                     print("--- Flux2/EnergyBin: ", fluxSquaredEnergyNorm)
                     print("--- Day time [h]:    ", time_calc/60/60 )
+        
+        prevLat = lat
         # add next event
         if countIntSec<integral:
             continue
@@ -536,6 +565,7 @@ for iev,ev in enumerate(dset2):
     # fill tree with measures / 1s*integral
     # effectively filles the values for the last integral time point
     Ev[0] = countEv
+    Night[0] = ascending
     Orbit[0] = orbit_index
     L[0] = Lshell
     T[0] = daytime # in hours

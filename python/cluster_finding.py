@@ -541,10 +541,12 @@ def main():
     for i in np.arange(0,nentries):
         t.GetEntry(i)
 
-        clsnr_b[0] = -1
         if i in cluster_index:
             clsnr_b[0] = int(cluster_index[i])
             #print(i, cluster_index[i])
+        else:
+            clsnr_b[0] = -1
+
         thr_b[0] = cut[i]
 
         spec_b[0] = -1

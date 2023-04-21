@@ -25,6 +25,7 @@ parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
 #parser.add_argument('--integrateEn', action='store_true', help='Merge all fluxes over all energy bins.')
 parser.add_argument('--originalEnergyBins', action='store_true', help='Use original energy binning.')
+parser.add_argument('--ascending', action='store_true', help='Use only ascending orbits for flux analysis.')
 args,_=parser.parse_known_args()
 
 version=args.useVersion
@@ -463,6 +464,8 @@ writeOutPar = 'mean_counts meanErr_counts rms99 rmsErr99 rms99_of_99 rmsErr99_of
 outFilePath = '{0}/data/averages/{1}/{2}/'.format(sharedOutPath(),version,args.data)
 if args.integral:
     outFilePath = '{0}/data/averages/{1}/{2}/{3}s/'.format(sharedOutPath(), version, args.data, args.integral)
+if args.ascending:
+    outFilePath += 'ascending/'
 if args.sigma=='gauss':
     outFilePath += args.sigma+'/'
     writeOutPar = 'mean_counts meanErr_counts mpv mpvErr sigma sigmaErr chi2'
@@ -473,6 +476,7 @@ if args.originalEnergyBins:
     outFilePath += 'originalEnergyBins/'
 if args.threshold != 100:
     outFilePath += str(threshold)+'ev/'
+
 if not os.path.exists(outFilePath):
     os.makedirs(outFilePath)
 print('Files will be stored in:     ', outFilePath)
@@ -487,10 +491,11 @@ for d in lst:
       if 'noaa' in det:
           calibDict = readCalibRuns(det,int(str(d)[:6]))
           # print(calibDict, d)
-          if d in calibDict:
-              h_sta, h_sto = calibDict[d]
-              addOnOption = ' && (time < {0} || time > {1})'.format(h_sta, h_sto)
-              print(addOnOption)
+          if calibDict:
+              if d in calibDict:
+                  h_sta, h_sto = calibDict[d]
+                  addOnOption = ' && (time < {0} || time > {1})'.format(h_sta, h_sto)
+                  print(addOnOption)
 
       # list of commands to be run in parallel
       commands = []
@@ -552,25 +557,27 @@ for d in lst:
                         histCmdUnbinned = 'flux_{0}_{1}>>{2}'.format(L,P,histNameUnbinned)
                         histCmdCounts = 'flux_{0}_{1}*{2}>>{3}({4},0,{5})'.format(L,P,1/flux_binWidth,histNameCounts,count_bins,count_bins)
                         drawOptions = 'field>{4} && day=={0} && energy_{1}_{2}=={3}{5}'.format(d,L,P,en,getSAAcut(det),addOnOption)
+                        if args.ascending:
+                            drawOptions += ' && ascending==1'
                         if count_bins==-1:
                             histCmdCounts = 'flux_{0}_{1}*{2}>>{3}'.format(L,P,geomFactor,histNameCounts)
                             histCmd = 'flux_{0}_{1}>>{2}'.format(L,P,histName)
 
-                        # NOAA 90degree needs distinguish in ascending and descending orbits
-                        if det=='noaa_poes19_90degree':
-                            for i in [0,1]:
-                                drawOptionsNew = drawOptions+' && ascending=='+str(i)
-                                histNameNew = histName+'_'+str(i)
-                                histNameCountsNew = histNameCounts+'_'+str(i)
-                                histCmdNew = 'flux_{0}_{1}>>{2}({3},0,{4})'.format(L,P,histNameNew,count_bins,count_bins*flux_binWidth)
-                                histCmdCountsNew = 'flux_{0}_{1}*{2}>>{3}({4},0,{5})'.format(L,P,1/flux_binWidth,histNameCountsNew,count_bins,count_bins)
-                                lst_comm = [ filename, histCmdNew, drawOptionsNew, 'goff', histNameNew, writeOut, outFileName, hists, iP, meanGeomIndex, histCmdCountsNew, '{0}_{1}_{2}_{3}'.format(d,L,P,en), ien, iL, i ]
-                                commands.append(lst_comm)
-                                count += 1
-                        else:
-                            lst_comm = [ filename, histCmd, drawOptions, 'goff', histName, writeOut, outFileName, hists, iP, meanGeomIndex, histCmdCounts, '{0}_{1}_{2}_{3}'.format(d,L,P,en), ien, iL, -1, histCmdUnbinned, histNameUnbinned ]
-                            commands.append(lst_comm)
-                            count += 1
+                        ## NOAA 90degree needs distinguish in ascending and descending orbits
+                        #if det=='noaa_poes19_90degree':
+                        #    for i in [0,1]:
+                        #        drawOptionsNew = drawOptions+' && ascending=='+str(i)
+                        #        histNameNew = histName+'_'+str(i)
+                        #        histNameCountsNew = histNameCounts+'_'+str(i)
+                        #        histCmdNew = 'flux_{0}_{1}>>{2}({3},0,{4})'.format(L,P,histNameNew,count_bins,count_bins*flux_binWidth)
+                        #        histCmdCountsNew = 'flux_{0}_{1}*{2}>>{3}({4},0,{5})'.format(L,P,1/flux_binWidth,histNameCountsNew,count_bins,count_bins)
+                        #        lst_comm = [ filename, histCmdNew, drawOptionsNew, 'goff', histNameNew, writeOut, outFileName, hists, iP, meanGeomIndex, histCmdCountsNew, '{0}_{1}_{2}_{3}'.format(d,L,P,en), ien, iL, i ]
+                        #        commands.append(lst_comm)
+                        #        count += 1
+                        #else:
+                        lst_comm = [ filename, histCmd, drawOptions, 'goff', histName, writeOut, outFileName, hists, iP, meanGeomIndex, histCmdCounts, '{0}_{1}_{2}_{3}'.format(d,L,P,en), ien, iL, -1, histCmdUnbinned, histNameUnbinned ]
+                        commands.append(lst_comm)
+                        count += 1
 
                         if debug and count>5:
                             break

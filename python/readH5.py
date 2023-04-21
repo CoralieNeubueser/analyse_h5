@@ -152,6 +152,9 @@ F_vec_pt = r.std.vector(float)(9)
 F_vecvec = r.std.vector(float)()
 T = array( 'f', [ 0. ] )
 Tday = array( 'i', [0] )
+Hou = array( 'i', [0] )
+Min = array( 'i', [0] )
+Sec = array( 'i', [0] )
 Lo = array( 'f', [ 0. ] )
 La = array( 'f', [ 0. ] )
 geomLo = array( 'f', [ 0. ] )
@@ -177,8 +180,11 @@ tree.Branch( 'nflux', N, 'nflux/I' )
 tree.Branch( 'flux_en', F_vec_en) 
 tree.Branch( 'flux_pt', F_vec_pt) 
 tree.Branch( 'flux', F_vecvec) 
-tree.Branch( 'time', T, 'time/F' )
 tree.Branch( 'day', Tday, 'day/I' )
+tree.Branch( 'time', T, 'time/F' )
+tree.Branch( 'hour', Hou, 'hour/I' )
+tree.Branch( 'minute', Min, 'minute/I' )
+tree.Branch( 'second', Sec, 'second/I' )
 tree.Branch( 'Long', Lo, 'Long/F' )
 tree.Branch( 'Lat', La, 'Lat/F' )
 tree.Branch( 'geomLong', geomLo, 'geomLong/F' )
@@ -277,13 +283,22 @@ for iev,ev in enumerate(dset2):
             countInt = dset_count[iev]
                 
         elif args.data=='hepp_l' or args.data=='hepp_h':
+            #print(dset_time[iev][0])
             # fill tree and histos for HEPP data
+            # format: YYYYMMDDHHMMSS
+            #print(dset_time[iev][0])
+            if dset_time[iev][0] == -9999:
+                print("Something is wrong in input.. date is set to -9999. Take next event. ")
+                continue
             time_file = 60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
             time_calc = time_min + iev
             #print(time_calc - time_file)
             time_act = (time_calc-time_min)/60.
             # time from filename is exactly 1 minute off, take the times as stored in file 
             daytime = time_file/60./60. #time_calc/60./60.
+            hours = int(str(dset_time[iev][0])[-6:-4])
+            minutes = int(str(dset_time[iev][0])[-4:-2])
+            seconds = int(str(dset_time[iev][0])[-2:])
             day = int(str(dset_time[iev][0])[:4] + str(dset_time[iev][0])[4:6] + str(dset_time[iev][0])[6:8]) #int(str(time_blanc)[-14:-6])
             year = int(str(time_blanc)[-14:-10])
 
@@ -291,6 +306,9 @@ for iev,ev in enumerate(dset2):
             lat = dset_lat[iev][0] #[1])
             gmlon = dset_gmlon[iev][0]
             gmlat = dset_gmlat[iev][0] #[1])
+            if lat>90:
+                print("Something is wrong in Lat/Lon of input.. {},{} skip this event.".format(lat, lon))
+                continue
             Bfield = fieldMap[(int(times[5]), int(lat), int(lon))]
             BfieldSum += Bfield
             Lshell = dset1[iev][0]
@@ -427,7 +445,7 @@ for iev,ev in enumerate(dset2):
                         countInt += dset_count[iev][ip]
                         Pvalue = dset_p[iev][ip]
                     else:
-                        countInt = dset_count[iev][0]
+                        countInt = dset_count[iev]
                         Pvalue = (dset_p[0][ip]+dset_p[0][ip-1])/2.
                         if ip==0:
                             Pvalue = dset_p[0][ip]/2.
@@ -569,6 +587,9 @@ for iev,ev in enumerate(dset2):
     Orbit[0] = orbit_index
     L[0] = Lshell
     T[0] = daytime # in hours
+    Hou[0] = hours
+    Min[0] = minutes
+    Sec[0] = seconds
     Tday[0] = day 
     C[0] = countInt
     Lo[0] = lon

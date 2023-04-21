@@ -20,6 +20,7 @@ parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','
 parser.add_argument('--day', type=int, help='Define the day of the fluxes that are suppose to be stored.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
 parser.add_argument('--tryFit', action='store_true', help='Try to fit count distributions with exponential..')
+parser.add_argument('--ascending', action='store_true', help='Use only ascending orbits for flux analysis.')
 parser.add_argument('--debug', action='store_true', help='Run in debug mode.')
 args,_=parser.parse_known_args()
 
@@ -86,6 +87,8 @@ if 'noaa' in det:
     replacement = 'all_highFluxes_'+det
 outfilename = os.path.basename(filename.replace(fileSnip,replacement))
 outpath = os.path.dirname(filename)+'/'
+if args.ascending:
+    outpath += 'ascending/'
 
 methodDirName = ''
 if method=='rms99':
@@ -198,8 +201,9 @@ for day in days:
     if 'noaa' in det:
         calibDict = readCalibRuns(det,int(str(day)[:6]))
         # print(calibDict, d)
-        if day in calibDict:
-            h_sta, h_sto = calibDict[day]
+        if calibDict:
+            if day in calibDict:
+                h_sta, h_sto = calibDict[day]
     
     # prepare histograms
     hist2D = [ r.TH2D('hist2D_flux_'+str(day)+'_'+str(en)+'MeV', 'hist2D_flux_'+str(day)+'_'+str(en)+'MeV', l_bins, np.array(l_fine_bins), numPbin-1, np.array(Pbins,dtype=float)) for en in energies]
@@ -212,6 +216,8 @@ for day in days:
     path = sharedOutPath()+'/data/averages/'+args.useVersion+'/'+args.data+'/'
     if args.integral:
         path += str(args.integral)+'s/'
+    if args.ascending:
+        path += 'ascending/'
     if method=='gauss':
         path += 'gauss/'
     elif 'rms50' in method:
@@ -255,9 +261,10 @@ for day in days:
             continue
         # reject calibration periods
         if 'noaa' in det:
-            if ev.day in calibDict:
-                if ev.time>=h_sta and ev.time<=h_sto:
-                    continue
+            if calibDict:
+                if ev.day in calibDict:
+                    if ev.time>=h_sta and ev.time<=h_sto:
+                        continue
             
         # run over max. 1000 events in debug mode
         if args.debug and ev.event>1000:
@@ -365,7 +372,10 @@ for day in days:
                         geoIndex = -1
                     # fill output tree
                     Ev[0] = count
-                    Orbit[0] = ev.orbit
+                    if 'hep' in det:
+                        Orbit[0] = ev.orbit
+                    else:
+                        Orbit[0] = 0
                     Flux[0] = flux
                     if invGeomFactor!=0:
                         # define signal as #counts, rmsErr is half-width of flux distributions

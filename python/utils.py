@@ -45,6 +45,13 @@ def getLbins():
     l_bins=len(l_x_bins)-1
     return l_bins, l_x_bins
 
+# define L value bins for CAESAR
+# returns the number of bins and a list of bins
+def getLbins_CAESAR():
+    l_x_bins = [1.+0.2*x for x in range(0,51)]
+    l_bins=len(l_x_bins)-1
+    return l_bins, l_x_bins
+
 # define corser L value bins 
 # returns the number of bins and a list of bins
 def getCorserLbins():
@@ -402,7 +409,10 @@ def getEnergyBins_v2o2(det, rebinned):
     elif 'noaa' in det:
         return 4, [0.04, 0.13, 0.287, 0.612], 0.612
     elif det=='hepp_l' and rebinned:
-        return 16, [0.1, 0.28125, 0.4625, 0.64375, 0.825, 1.00625, 1.1875, 1.36875, 1.55, 1.73125, 1.9125, 2.09375, 2.275, 2.45625, 2.6375, 2.81875], 3   
+        return 11, [0.1, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95, 1.05], 3
+        #return 16, [0.1, 0.28125, 0.4625, 0.64375, 0.825, 1.00625, 1.1875, 1.36875, 1.55, 1.73125, 1.9125, 2.09375, 2.275, 2.45625, 2.6375, 2.81875], 3   
+    elif det=='hepp_h':
+        return 16, [ 1.0, 4.388239860534668, 7.776480197906494, 11.164719581604004, 14.552960395812988, 17.941200256347656, 21.329439163208008, 24.717679977416992, 28.105920791625977, 31.494159698486328, 34.88240051269531, 38.2706413269043, 41.658878326416016, 45.047119140625, 48.435359954833984, 51.82360076904297 ], 55.0
 
 # returns the geometrical correction factor for hepd data, per energy bin
 def getGeomCorr(hepd, energyBin):
@@ -446,7 +456,7 @@ def getGeomFactor(det,energyBin):
 
     # the geometrical factor is mixed between the channels.. use the smallest.
     elif det=='hepp_l_channel_all':
-        ele_corr_GF = 16*[0.12]
+        ele_corr_GF = 256*[0.12]
     # unknown geometrical factors.. for HEPP-H and NOAA-POES19
     elif det=='hepp_h':
         ele_corr_GF = 16*[1.] 
@@ -475,7 +485,7 @@ def getEnergyBinWidth(det, energyBin):
     if det=='hepp_l':
         #enBorder=np.array([0.1, 0.28125, 0.4625, 0.64375, 0.825, 1.00625, 1.1875, 1.36875, 1.55, 1.73125, 1.9125, 2.09375, 2.275, 2.45625, 2.6375, 2.81875, 3.0])
         #enBorder=np.array(16*[0.011])
-        return 0.01 
+        return 0.011 
     elif det=='hepp_h':
         return 0.21
     else:

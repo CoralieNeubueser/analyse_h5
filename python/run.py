@@ -6,10 +6,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--hepd', action='store_true', help='Analyse HEPD data.')
 parser.add_argument('--hepp_l', action='store_true', help='Analyse HEPP-L data.')
 parser.add_argument('--hepp_h', action='store_true', help='Analyse HEPP-H data.')
+parser.add_argument('--hepp_x', action='store_true', help='Analyse HEPP-X data.')
+parser.add_argument('--efd_vlf', action='store_true', help='Analyse EFD VLF data.')
 parser.add_argument('--noaa', action='store_true', help='Analyse NOAA data.')
+#parser.add_argument('--metop1', action='store_true', help='Analyse METOP01 data.')
+#parser.add_argument('--metop3', action='store_true', help='Analyse METOP03 data.')
 ### DETAILS OF INSTRUMENTS
 parser.add_argument('--channel', type=str, required= '--hepp_l' in sys.argv,  choices=['narrow','wide','all','0','1','2','3','4','5','6','7','8'], help='Choose narrow, wide, or all channels to be read.')
-parser.add_argument('--satellite', type=int, choices=[19], default=19, help='Define satellite.')
+parser.add_argument('--satellite', type=int, choices=[19,18,15,1,2,3], default=19, help='Define satellite.')
 parser.add_argument('--telescope', type=int, choices=[0,90], default=0, help='Define telescope.')
 
 ### ACTIONS
@@ -39,12 +43,13 @@ parser.add_argument('--draw', action='store_true', help='Allows to write out roo
 parser.add_argument('--allHists', action='store_true', help='Merge all runs, including the histograms.')
 parser.add_argument('--test', action='store_true', help='Analyse test runs.')
 parser.add_argument('--threshold', type=int, default=100, help='Pick a number as minimum statistic in histograms.')
+parser.add_argument('--ascending', action='store_true', help='Select only ascending orbits.')
 
 ### define specific period to run over
 parser.add_argument('--day', type=int, nargs='+', required=False, help='Merge orbits of a specific day [yyyymmdd].')
 parser.add_argument('--month', type=int, required=False, help='Merge orbits of a specific month [yyyymm].')
 
-parser.add_argument('--useVersion', type=str, default='v2.2', choices=['v1','v2','v2.1','v2.2','v2.3','v3','v3.1','v4'], help='Define wether flux=0 is stored.')
+parser.add_argument('--useVersion', type=str, default='v2.2', choices=['v1','v2','v2.1','v2.2','v2.3','v3','v3.1','v4','caesar'], help='Define wether flux=0 is stored.')
 parser.add_argument('--submit', action='store_true', help='Submit to HTCondor batch farm.')
 parser.add_argument('--debug', dest='quiet', action='store_false')
 parser.add_argument('-q','--quiet', action='store_true', help='Run without printouts.')
@@ -62,7 +67,7 @@ det = 'hepd'
 data = 'hepd'
 datapaths = []
 
-if args.noaa and version!='v2.1' and version!='v.3' and version!='v2.2':
+if args.noaa and version!='v2.1' and version!='v.3' and version!='v2.2' and version!='caesar':
     if version=='v2':
         version = 'v2.1'
     else:
@@ -99,21 +104,55 @@ elif args.hepp_l:
 elif args.hepp_h:
     data = 'hepp_h'
     det = 'hepp_h'
-    # get HEPP data of quiet period 1.-5.08.2018
     datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*{0}*{0}*.h5'.format(args.month))
     if args.day:
         for d in args.day:
             datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_2_L02*{0}*{0}*.h5'.format(d))
+elif args.hepp_x:
+    data = 'hepp_x'
+    det = 'hepp_x'
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_4_L02*{0}*{0}*.h5'.format(args.month))
+    if args.day:
+        for d in args.day:
+            datapaths += glob.glob('/storage/gpfs_data/limadou/data/cses_data/HEPP_LEOS/*HEP_4_L02*{0}*{0}*.h5'.format(d))
+elif args.efd_vlf:
+    data = 'efd_vlf'
+    det = 'efd_vlf'
+    datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/EFD/VLF/CSES_01_EFD_3_L02*{0}*{0}*.h5'.format(args.month))
+    if args.day:
+        for d in args.day:
+            print('we are here')
+            datapaths = glob.glob('/storage/gpfs_data/limadou/data/cses_data/EFD/VLF/CSES_01_EFD_3_L02*{0}*{0}*.h5'.format(d))
+
 elif args.noaa:
     data = 'noaa'
-    det = 'noaa_poes{0}_{1}degree'.format(args.satellite, args.telescope)
-    datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data/poes_n{1}_{0}*_proc.nc.root'.format(args.month,args.satellite))
+    if args.satellite>10:
+        det = 'noaa_poes{0}_{1}degree'.format(args.satellite, args.telescope)
+        name_vincenzo = 'poes_n{1}_{0}*_proc.nc.root'.format(args.month,args.satellite)
+    else:
+        det = 'metop{0}_{1}degree'.format(args.satellite, args.telescope)
+        name_vincenzo = 'poes_m0{1}_{0}*_proc.nc.root'.format(args.month,args.satellite)
+
+    #datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data/poes_n{1}_{0}*_proc.nc.root'.format(args.month,args.satellite))
+    # for 2022
+    #datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/data_grb/'+name_vincenzo)
     # older data for CEASAR
-    #datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data22/poes_n{1}_{0}*_proc.nc.root'.format(args.month,args.satellite))
+
+    if args.satellite>10:
+        datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data*/poes_n{1}_{0}*_proc.nc.root'.format(args.month,args.satellite))
+    else:
+        datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data*/poes_m0{1}_{0}*_proc.nc.root'.format(args.month,args.satellite))
+
     #datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data_spec/poes_n19_{0}*_proc.nc.root'.format(args.month))
     if args.day:
         for d in args.day:
-            datapaths += glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data/poes_n{1}_{0}_proc.nc.root'.format(d,args.satellite))
+            if args.satellite>10:
+                name_vincenzo = 'poes_n{1}_{0}_proc.nc.root'.format(d,args.satellite)
+            else:
+                name_vincenzo = 'poes_m0{1}_{0}_proc.nc.root'.format(d,args.satellite)
+            #datapaths += glob.glob('/storage/gpfs_data/limadou/vitalelimadou/run/data/poes_n{1}_{0}_proc.nc.root'.format(d,args.satellite))
+            datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/data*/'+name_vincenzo)
+            #datapaths = glob.glob('/storage/gpfs_data/limadou/vitalelimadou/data_grb/'+name_vincenzo)
 
 # sort files by time
 datapaths.sort(key=os.path.getmtime)
@@ -171,14 +210,26 @@ if not args.merge and not args.ana and not args.select and not args.clean and no
             if not os.path.isdir(buildPath):
                 os.makedirs(buildPath)
             cmd='python3 python/readH5.py --inputFile '+str(run)
+            
             if 'v2.1' in version or 'v2.2' in version:
                 cmd='python3 python/readH5_v2.1.py --inputFile '+str(run)
             elif version == 'v3':
                 cmd='python3 python/readH5_v3.py --inputFile '+str(run)
+            elif version == 'caesar':
+                cmd='python3 python/readH5_forCAESAR.py --inputFile '+str(run)
+            
             if data=='noaa':
                 cmd='python3 python/readSEM2.py --data noaa --satellite {0} --telescope {1} --inputFile {2}'.format(args.satellite, args.telescope, run)
                 if version == 'v3.1':
                     cmd='python3 python/readSEM2_v3.py --data noaa --satellite {0} --telescope {1} --inputFile {2}'.format(args.satellite, args.telescope, run)
+                elif version == 'caesar':
+                    cmd='python3 python/readSEM2_forCAESAR.py --data noaa --satellite {0} --telescope {1} --inputFile {2} '.format(args.satellite, args.telescope, run)
+
+            elif data=='hepp_x':
+                cmd='python3 python/readH5_xray.py --data hepp_x --inputFile {0}'.format(run)
+            elif data=='efd_vlf':
+                cmd='python3 python/readH5_efd.py --data efd_vlf --inputFile {0}'.format(run)
+
             if args.integral:
                 cmd+=' --integral '+str(args.integral)
             if not args.quiet:
@@ -249,6 +300,7 @@ elif args.merge and not args.test:
         pathToFind += 'originalEnergyBins/'
     elif args.integral:
         pathToFind = '{0}data/root/{1}/{2}/{3}s/'.format(sharedOutPath(),version,det,args.integral)
+
     runList = []
 
     if args.hepd:
@@ -275,15 +327,21 @@ elif args.merge and not args.test:
             runList.append( glob.glob('{0}CSES_HEP_DDD_*.root'.format(pathToFind)) )
             runs.append( len(runList[0]) )
 
-    elif args.hepp_l or args.hepp_h: 
+    elif args.hepp_l or args.hepp_h or args.hepp_x or args.efd_vlf: 
         index=1
+        ofilename = 'CSES_01_HEP_'
         if args.hepp_h:
             index=2
+        elif args.hepp_x:
+            index=4
+        elif args.efd_vlf:
+            index=3
+            ofilename = 'CSES_01_EFD_'
 
         if args.day:
             for d in args.day:
-                print('{0}CSES_01_HEP_{1}_L02_*{2}*.root'.format(pathToFind,index,d))
-                runList.append(sorted( glob.glob('{0}CSES_01_HEP_{1}_L02_*{2}*.root'.format(pathToFind,index,d)), key=lambda x:float(x[-46:-41]) ) )
+                print('{0}{1}{2}_*{3}*.root'.format(pathToFind,ofilename,index,d))
+                runList.append(sorted( glob.glob('{0}{1}{2}*{3}*.root'.format(pathToFind,ofilename,index,d)), key=lambda x:float(x[-46:-41]) ) )
                 mges.append('{0}all_{1}_{2}_{3}_runs.root'.format(pathToFind,det,d,len(runList[0])))
                 findOlds.append( glob.glob('{0}all_{1}_{2}*.root'.format(pathToFind,det,d)) )
                 runs.append( len(runList[0]) )
@@ -293,7 +351,8 @@ elif args.merge and not args.test:
                 strD = str(d)
                 if d<10:
                     strD = '0'+str(d)
-                runList.append( sorted( glob.glob('{0}CSES_01_HEP_{1}_L02_*_{2}_*.root'.format(pathToFind,index,str(args.month)+strD)), key=lambda x:float(x[-46:-41]) ) )
+                runList.append( sorted( glob.glob('{0}{1}{2}*_{3}_*.root'.format(pathToFind,ofilename,index,str(args.month)+strD)), key=lambda x:float(x[-46:-41]) ) )
+                print('{0}{1}{2}*_{3}_*.root'.format(pathToFind,ofilename,index,str(args.month)+strD))
                 mges.append( '{0}all_{1}_{2}_{3}_runs.root'.format(pathToFind,det,str(args.month)+strD,len(runList[d-1])) )
                 findOlds.append( glob.glob('{0}all_{1}_{2}*.root'.format(pathToFind,det,str(args.month)+strD)) )
                 runs.append( len(runList[d-1]) )
@@ -348,6 +407,8 @@ elif args.merge and not args.test:
             cmd += '--drawHistos '
         if args.integral:
             cmd += '--integral {} '.format(args.integral)
+        if args.ascending:
+            cmd += '--ascending '
         if not args.quiet:
             cmd += '--debug '
         totCmds.append(cmd)
@@ -436,6 +497,8 @@ elif args.select:
             cmd = 'python3 python/findHighFluxes_v3.py --inputFile {0} --data {1} --sigma {2} --numSigma {3} --useVersion {4} --thr {5}'.format(foundFile[0],det,args.sigma,args.numSigma,version,args.threshold)
         if args.integral:
             cmd += ' --integral {0}'.format(args.integral)
+        if args.ascending:
+            cmd += ' --ascending'
         if args.day:
             if d in args.day:
                 cmd += ' --day '+str(d)
@@ -593,13 +656,13 @@ if args.clean:
 
     print(datapaths)
 
-    if not (args.hepp_l or args.hepp_h or args.hepd):
-        print("Clean-up only necessary for HEPP data. ")
+    if not (args.hepp_l or args.hepp_h or args.hepp_x or args.hepd or args.efd_vlf):
+        print("Clean-up only necessary for CSES data. ")
         datapaths = []
 
     removeOrbits=0
 
-    if (args.hepp_l or args.hepp_h):
+    if (args.hepp_l or args.hepp_h or args.hepp_x or args.efd_vlf):
         # cleanup of double orbit index
         lastOrbit={}
         orbit_file={}

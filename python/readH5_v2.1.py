@@ -103,7 +103,8 @@ if args.data=='hepp_l' or args.data=='hepp_h':
     time_blanc = int(str(times[5]+times[6]))  #int(str(times[1]+times[2])) #str(dset_time[0])
     time_blanc_min = str(times[7]+times[8]) #int(str(times[3]+times[4])) #dset_time[maxEv-1][0]
     # read field map             
-    fieldMap = readIGRF(times[5])
+    fieldMap = readIGRF_csv(times[5])
+    #fieldMap = readIGRF(times[5])
     #print(fieldMap)
 elif args.data=='hepd':
     # CSES_HEP_DDD_0050621_20190101_062903_20190101_070349_L3_0000061251
@@ -275,6 +276,9 @@ for iev,ev in enumerate(dset2):
                 
         elif args.data=='hepp_l' or args.data=='hepp_h':
             # fill tree and histos for HEPP data 
+            if dset_time[iev][0] == -9999:
+                print("Something is wrong in input.. date is set to -9999. Take next event. ")
+                continue
             time_file = 60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
             #time_calc = time_min + iev #60*60*int(str(dset_time[iev][0])[-6:-4]) + 60*int(str(dset_time[iev][0])[-4:-2]) + int(str(dset_time[iev][0])[-2:])
             #time_act = (time_calc-time_min)/60.
@@ -291,6 +295,9 @@ for iev,ev in enumerate(dset2):
             latInt = dset_lat[iev][0] #[1])
             gmlonInt = dset_gmlon[iev][0]
             gmlatInt = dset_gmlat[iev][0] #[1])
+            if lat>90:
+                print("Something is wrong in Lat/Lon of input.. {},{} skip this event.".format(lat, lon))
+                continue
             Bfield = fieldMap[(int(times[5]), int(latInt), int(lonInt))]
             BfieldSum += Bfield
             Lshell = dset1[iev][0]
@@ -321,6 +328,21 @@ for iev,ev in enumerate(dset2):
                 print("ATTENTION!!! in debug mode only 4 events will be processed! use -q")
                 break
     
+ 
+        # if rebin, merge fluxes in new energy bins, before integration over time                                                                                                                                                                                             
+        if rebin:
+            oldEnergyBins = getEnergyBins(args.data, False)
+            newEv = np.zeros((energy_bins,len(ev[0])))
+            # loop through energy bins                                                                                                                                                                                                                                        
+            for ie,en in enumerate(ev):
+                # loop through pitch                                                                                                                                                                                                                                          
+                for ip,flux in enumerate(en):
+                    original_energy = oldEnergyBins[1][ie]                                                                                                                                                                               
+                    for iE in range(energyBins[0]):
+                        if original_energy >= energyBins[1][iE]:
+                            newEv[iE,ip] += flux
+            ev = newEv
+
         # loop through energy bins
         for ie,en in enumerate(ev):
             # loop through pitch
@@ -338,9 +360,10 @@ for iev,ev in enumerate(dset2):
                     elif not ip&1 and args.channel=='wide':
                         # gerade: narrow opening angle
                         continue
-                    elif ip!=int(args.channel):
-                        # allow to select single channels
-                        continue
+                    elif args.channel!='all':
+                        if ip!=int(args.channel):
+                            # allow to select single channels
+                            continue
 
                 # rebin the HEPP-H entries from 36 to 9
                 if args.data == 'hepp_h':
@@ -358,22 +381,16 @@ for iev,ev in enumerate(dset2):
             
                 # HEPP-L data stores counts per 9 different devices
                 # select either narrow/wide channels by local pitch angle
-                # fill energy-flux vector (summ over fluxes over all pitches) 
+                # fill energy-flux vector (summ over fluxes over all pitches)
                 if not hepd:
                     if args.data=='hepp_l': # and int(str(times[5])[0:4]) > 201812:
                         countInt += dset_count[iev][ip]
                         Pvalue = dset_p[iev][ip]
                     else:
-                        countInt = dset_count[iev][0]
+                        countInt = dset_count[iev]
                         Pvalue = (dset_p[0][ip]+dset_p[0][ip-1])/2.
                         if ip==0:
                             Pvalue = dset_p[0][ip]/2.
-                    # rebin the energy range from 256 to 16
-                    if rebin:
-                        ie_new = int(ie/16.)
-                    
-                    vec_en[ie_new] += fluxSquared
-
                 else:
                     Pvalue = (dset_p[0][ip]+dset_p[0][ip-1])/2.
                     if ip==0:
@@ -386,6 +403,7 @@ for iev,ev in enumerate(dset2):
 
                 # fill pitch-flux vector (summ over fluxes over all energies, normalise before to MeV, using the energy bin width)
                 vec_pt[ip_new] += fluxSquaredEnergyNorm
+                vec_en[ie_new] += fluxSquared
                 # calculate equatorial pitch angle
                 alpha_eq = getAlpha_eq( Pvalue, Bfield, Beq )
                 Albin=-1

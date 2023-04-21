@@ -14,7 +14,7 @@ r.gStyle.SetPadRightMargin(0.2)
 parser = argparse.ArgumentParser()
 parser.add_argument('--inputFile', type=str, help='Define patht to data file.')
 parser.add_argument('--data', type=str, choices=['noaa'], required=True, help='Define patht to data file.')
-parser.add_argument('--satellite', type=int, choices=[19], default=19, required=True, help='Define satellite.')
+parser.add_argument('--satellite', type=int, choices=[19,18,15,1,3], default=19, required=True, help='Define satellite.')
 parser.add_argument('--telescope', type=int, choices=[0,90], default=0, required=True, help='Define telescope.')
 parser.add_argument('--useVersion', type=str, default='v2', choices=['v1','v2','v2.1','v2.2'], help='Define wether v1/ (no flux=0) or v2/ (all fluxes), or v2.1/ (all fluxes, summed over energy) is written.')
 parser.add_argument('--integral', type=int, help='Define the time window for integration in seconds.')
@@ -58,6 +58,8 @@ print("input files has ",entries, " entries")
 # prepare root output
 rootName = os.path.split(Rfilename)[1]
 det = '{0}_poes{1}_{2}degree'.format(args.data,args.satellite,args.telescope)
+if args.satellite<10:
+    det = 'metop{0}_{1}degree'.format(args.satellite,args.telescope)
 outRootDir = sharedOutPath()+"/data/root/"+args.useVersion+"/"+det+"/"
 if integral!=-1:
     outRootDir = sharedOutPath()+"/data/root/"+args.useVersion+"/"+det+"/"+str(args.integral)+"s/"
